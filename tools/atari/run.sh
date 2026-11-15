@@ -26,7 +26,8 @@
 # Environment:
 #   MACHINE  tt (default; TOS 3.06, 2 MB ST-RAM + 4 MB TT-RAM, VGA),
 #            tt4 (TT with 4 MB ST-RAM only), falcon (EmuTOS 512K, 14 MB,
-#            VGA; MON=rgb for RGB), ste (TOS 1.62, 4 MB), st (TOS 1.04)
+#            VGA; MON=rgb for RGB), ste (TOS 1.62, 4 MB), st (TOS 1.04),
+#            megaste (TOS 2.06, 4 MB: STDL runs it at 16 MHz with the cache)
 #   ARGS     the program's arguments (written to the drive: Hatari can't
 #            pass them to an autostarted program, so CHOCDOOM reads
 #            ARGS.TXT when it has none)
@@ -73,6 +74,7 @@ case $MACHINE in
             --monitor ${MON:-vga} --memsize 14 --dsp none --cpu-exact on" ;;
   ste)    MACH="--tos $TOSDIR/tos162uk.img --machine ste --memsize 4" ;;
   st)     MACH="--tos $TOSDIR/tos104uk.img --machine st --memsize 4" ;;
+  megaste) MACH="--tos $TOSDIR/tos206uk.img --machine megaste --memsize 4" ;;
   *)      echo "unknown MACHINE $MACHINE" >&2; exit 2 ;;
 esac
 

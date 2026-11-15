@@ -186,7 +186,14 @@ sources:
 `tools/atari/run.sh` runs a program under Hatari from a drive of its
 own, with the IWAD, and plays a script against Hatari's command fifo
 (screenshots, keys, profiling); `MACHINE=tt` (2 MB + 4 MB TT-RAM),
-`tt4`, `falcon`, `ste` or `st`. `tools/atari/profagg.py` sums a profile
+`tt4`, `falcon`, `ste`, `st` or `megaste` (16 MHz with the cache, which
+STDL turns on). `-benchsecs N`, in any of the games, plays N seconds
+from the first frame and quits with frames a second and the game's speed:
+with `-playdemo demo1`, a game's real frame rate. On a 4 MB Mega STE
+(Hatari), Doom gave 0.32 frames a second with the game at 28% of its
+speed, Hexen 0.21 at 20% and Heretic 0.14 at 14%; Strife's zone is too
+small there, as on a TT with 4 MB of TT-RAM. A 68000 takes longer than a
+tic over a tic's game logic, so no frame rate keeps the game at speed. `tools/atari/profagg.py` sums a profile
 per function; give the profiled program another name (`PRGNAME=X.TOS`) so
 it doesn't move, as Hatari can't take a moved program's symbols.
 

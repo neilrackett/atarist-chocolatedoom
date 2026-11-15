@@ -37,6 +37,7 @@
 
 #include "config.h"
 #include "d_event.h"
+#include "d_loop.h"
 #include "deh_str.h"
 #include "doomtype.h"
 #include "i_atari.h"
@@ -82,6 +83,9 @@ static boolean anything_marked;
 // (messages, the menu, the crosshair over the view). x0 >= x1: none.
 static int view_x0, view_x1, view_y0, view_y1;
 static boolean nopairs;
+
+// -benchsecs N: frames a second over N seconds of play, for any game
+static int bench_secs, bench_frames, bench_start = -1, bench_gametic;
 
 // Configuration variables, all of i_video.c's, so a config file written
 // on another machine reads and writes back unchanged. Most have no
@@ -420,6 +424,25 @@ void I_FinishUpdate (void)
         return;
     }
 
+    if (bench_secs > 0)
+    {
+        int now = I_GetTime();
+
+        if (bench_start < 0)
+        {
+            bench_start = now;
+            bench_gametic = gametic;
+        }
+        else if (now - bench_start >= bench_secs * TICRATE)
+        {
+            I_Error("benchsecs: %d frames in %d tics: %.2f fps, the game"
+                    " at %d%% speed", bench_frames, now - bench_start,
+                    bench_frames * (float) TICRATE / (now - bench_start),
+                    (gametic - bench_gametic) * 100 / (now - bench_start));
+        }
+        ++bench_frames;
+    }
+
     // draws little dots on the bottom of the screen
 
     if (display_fps_dots)
@@ -585,6 +608,23 @@ void I_GraphicsCheckCommandLine(void)
     //
 
     nopairs = M_CheckParm("-nopairs") > 0;
+
+    //!
+    // @category video
+    // @arg <n>
+    //
+    // Frames a second over n seconds of play from the first frame
+    // drawn, then quit: with -playdemo, a game's real frame rate.
+    //
+
+    {
+        int p = M_CheckParmWithArgs("-benchsecs", 1);
+
+        if (p > 0)
+        {
+            bench_secs = atoi(myargv[p + 1]);
+        }
+    }
 }
 
 void I_InitGraphics(void)
