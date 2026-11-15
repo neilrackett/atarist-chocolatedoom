@@ -28,6 +28,7 @@
 //     copies. An ST always shows 320x200.
 //
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -73,6 +74,14 @@ static pixel_t *video_buffer_mem;
 #define NUM_BANDS ((SCREENHEIGHT + BAND_ROWS - 1) / BAND_ROWS)
 static short band_x0[NUM_BANDS], band_x1[NUM_BANDS];
 static boolean anything_marked;
+
+// The 3D view's box when it is in pixel pairs (low detail), copied
+// apart from the marks with STDL_SDL2_RenderCopyPairs: the add-on
+// converts a group of pairs in 56 instructions where any other takes
+// 74, and converts whole any group that a mark's copy also reaches
+// (messages, the menu, the crosshair over the view). x0 >= x1: none.
+static int view_x0, view_x1, view_y0, view_y1;
+static boolean nopairs;
 
 // Configuration variables, all of i_video.c's, so a config file written
 // on another machine reads and writes back unchanged. Most have no
@@ -177,9 +186,26 @@ void I_MarkRect(int x, int y, int w, int h)
     anything_marked = true;
 }
 
+void I_MarkView(int x, int y, int w, int h, boolean pairs)
+{
+    if (!pairs || nopairs)
+    {
+        I_MarkRect(x, y, w, h);
+        return;
+    }
+
+    view_x0 = x;
+    view_x1 = x + w;
+    view_y0 = y;
+    view_y1 = y + h;
+    anything_marked = true;
+}
+
 static void ClearMarks(void)
 {
     int b;
+
+    view_x0 = view_x1 = 0;
 
     for (b = 0; b < NUM_BANDS; ++b)
     {
@@ -190,8 +216,9 @@ static void ClearMarks(void)
     anything_marked = false;
 }
 
-// Doom's rows [sy, sy + h), groups [x0, x1), to picture rows from dy
-static void CopyRows(int x0, int x1, int sy, int dy, int h)
+// Doom's rows [sy, sy + h), groups [x0, x1), to picture rows from dy;
+// as pixel pairs with pairs
+static void CopyRows(int x0, int x1, int sy, int dy, int h, boolean pairs)
 {
     SDL_Rect src, dst;
 
@@ -201,20 +228,27 @@ static void CopyRows(int x0, int x1, int sy, int dy, int h)
     dst.y = dy;
     src.h = dst.h = h;
 
-    SDL_RenderCopy(renderer, texture, &src, &dst);
+    if (pairs)
+    {
+        STDL_SDL2_RenderCopyPairs(renderer, texture, &src, &dst);
+    }
+    else
+    {
+        SDL_RenderCopy(renderer, texture, &src, &dst);
+    }
 }
 
 // One box of Doom's screen, rows [y0, y1), to the renderer. Stretched,
 // picture row d shows Doom's row d * 200 / 240: Doom's rows 5k to 5k + 4
 // are picture rows 6k + 1 to 6k + 5, and row 5k is picture row 6k too,
 // so a block of five rows is two copies.
-static void CopyBox(int x0, int x1, int y0, int y1)
+static void CopyBox(int x0, int x1, int y0, int y1, boolean pairs)
 {
     int k, s0, s1;
 
     if (picture_height == SCREENHEIGHT)
     {
-        CopyRows(x0, x1, y0, y0, y1 - y0);
+        CopyRows(x0, x1, y0, y0, y1 - y0, pairs);
         return;
     }
 
@@ -224,9 +258,9 @@ static void CopyBox(int x0, int x1, int y0, int y1)
         s1 = k * 5 + 5 < y1 ? k * 5 + 5 : y1;
         if (s0 == k * 5)
         {
-            CopyRows(x0, x1, s0, k * 6, 1);
+            CopyRows(x0, x1, s0, k * 6, 1, pairs);
         }
-        CopyRows(x0, x1, s0, s0 + k + 1, s1 - s0);
+        CopyRows(x0, x1, s0, s0 + k + 1, s1 - s0, pairs);
     }
 }
 
@@ -235,6 +269,11 @@ static void CopyBox(int x0, int x1, int y0, int y1)
 static void CopyMarked(void)
 {
     int b, b0, y1;
+
+    if (view_x0 < view_x1)
+    {
+        CopyBox(view_x0, view_x1, view_y0, view_y1, true);
+    }
 
     b = 0;
     while (b < NUM_BANDS)
@@ -257,7 +296,7 @@ static void CopyMarked(void)
         {
             y1 = SCREENHEIGHT;
         }
-        CopyBox(band_x0[b0], band_x1[b0], b0 * BAND_ROWS, y1);
+        CopyBox(band_x0[b0], band_x1[b0], b0 * BAND_ROWS, y1, false);
     }
 }
 
@@ -275,6 +314,17 @@ void I_ShutdownGraphics(void)
 {
     if (initialized)
     {
+        STDL_SDL2_Check chk;
+
+        // -sdl2check's result: the pages that differed from the screen
+        // Doom drew
+        if (STDL_SDL2_GetCheck(renderer, &chk) == 0)
+        {
+            printf("sdl2check: %lu flips, %lu unlike the screen drawn"
+                   " (first: flip %lu, row %d)\n",
+                   (unsigned long) chk.flips, (unsigned long) chk.bad,
+                   (unsigned long) chk.first_flip, chk.first_row);
+        }
         SDL_DestroyTexture(texture);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(screen);
@@ -310,6 +360,15 @@ void I_GetEvent(void)
                 {
                     I_HandleMouseEvent(&sdlevent);
                 }
+                break;
+
+            // The pad is read only after it changes (i_joystick.c)
+            case SDL_CONTROLLERBUTTONDOWN:
+            case SDL_CONTROLLERBUTTONUP:
+            case SDL_CONTROLLERAXISMOTION:
+            case SDL_CONTROLLERDEVICEADDED:
+            case SDL_CONTROLLERDEVICEREMOVED:
+                I_AtariGamepadEvent();
                 break;
 
             case SDL_QUIT:
@@ -511,6 +570,15 @@ void I_GraphicsCheckCommandLine(void)
     //
 
     nomouse = M_CheckParm("-nomouse") > 0;
+
+    //!
+    // @category video
+    //
+    // Convert the low-detail view as any other pixels, not as pairs:
+    // for timing the difference.
+    //
+
+    nopairs = M_CheckParm("-nopairs") > 0;
 }
 
 void I_InitGraphics(void)
@@ -540,6 +608,20 @@ void I_InitGraphics(void)
     {
         I_Error("Error creating window for video startup: %s",
                 SDL_GetError());
+    }
+
+    //!
+    // @category video
+    //
+    // The add-on's screen check, for testing: each page is compared
+    // with the screen Doom drew before it is shown, and the count
+    // printed at the end (230K of memory, and a page's conversion a
+    // frame).
+    //
+
+    if (M_CheckParm("-sdl2check"))
+    {
+        SDL_SetHint(STDL_SDL2_HINT_CHECK, "1");
     }
 
     renderer = SDL_CreateRenderer(screen, -1, 0);

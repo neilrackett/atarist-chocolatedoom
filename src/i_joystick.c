@@ -419,8 +419,31 @@ static int GetDirectionalInputGamepad(const int *axis_values)
             (rightstick << RSTICK_SHIFT));
 }
 
+#ifdef ATARI
+// Reading the pad's 15 buttons and 6 axes through the add-on every tic
+// took 0.2 ms of a TT's tic, mostly to find nothing changed. Every
+// change comes as an SDL_CONTROLLER event, so the pad is read after
+// one, and while it is away from rest (the menus repeat a held
+// direction); at rest an event like the last changes nothing.
+static boolean gamepad_changed = true;
+static boolean gamepad_active = false;
+
+void I_AtariGamepadEvent(void)
+{
+    gamepad_changed = true;
+}
+#endif
+
 void I_UpdateGamepad(void)
 {
+#ifdef ATARI
+    if (!gamepad_changed && !gamepad_active)
+    {
+        return;
+    }
+    gamepad_changed = false;
+#endif
+
     if (gamepad != NULL)
     {
         event_t ev;
@@ -452,6 +475,10 @@ void I_UpdateGamepad(void)
                                        joystick_look_dead_zone);
         ev.data6 = GetDirectionalInputGamepad(axis_values);
 
+#ifdef ATARI
+        gamepad_active = ev.data1 || ev.data2 || ev.data3 || ev.data4
+                      || ev.data5 || ev.data6;
+#endif
         D_PostEvent(&ev);
     }
 }

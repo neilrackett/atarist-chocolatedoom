@@ -72,7 +72,12 @@ int			showMessages = 1;
 	
 
 // Blocky mode, has default, 0 = high, 1 = normal
+#ifdef ATARI
+// Low detail by default: a TT draws a frame in two thirds of the time
+int			detailLevel = 1;
+#else
 int			detailLevel = 0;
+#endif
 int			screenblocks = 9;
 
 // temp for screenblocks (0-9)

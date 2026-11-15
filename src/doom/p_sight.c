@@ -174,12 +174,6 @@ P_InterceptVector2
 // bytes. Map coordinates are whole units, so the side tests below give
 // what P_DivlineSide gives on id's values, with its arithmetic.
 //
-typedef struct
-{
-    short		x, y, dx, dy;
-    unsigned short	children[2];
-} sightnode_t;
-
 // Laid out as a node (its line's first end and direction), so one side
 // test serves both in the 68020 trace below
 typedef struct
@@ -195,7 +189,7 @@ typedef struct
     const sightseg_t*	end;
 } sightsub_t;
 
-static sightnode_t*	sightnodes;
+sightnode_t*		sightnodes;	// p_local.h
 static sightseg_t*	sightsegs;
 static sightsub_t*	sightsubs;
 
@@ -316,20 +310,16 @@ P_NodeSide
 
 // The rest of id's P_CrossSubsector loop for a line whose ends are on
 // both sides of the sight line: false stops the check.
+static boolean P_SightCrossedLine (seg_t* seg, divline_t* divl);
+
 static boolean P_SightCrossLine (seg_t* seg)
 {
     line_t*		line;
     int			s1;
     int			s2;
-    sector_t*		front;
-    sector_t*		back;
-    fixed_t		opentop;
-    fixed_t		openbottom;
     divline_t		divl;
     vertex_t*		v1;
     vertex_t*		v2;
-    fixed_t		frac;
-    fixed_t		slope;
 
     line = seg->linedef;
     v1 = line->v1;
@@ -345,6 +335,20 @@ static boolean P_SightCrossLine (seg_t* seg)
     // line isn't crossed?
     if (s1 == s2)
 	return true;
+
+    return P_SightCrossedLine (seg, &divl);
+}
+
+// The sight line crosses seg's line, divl: the rest of id's loop for it
+static boolean P_SightCrossedLine (seg_t* seg, divline_t* divl)
+{
+    line_t*		line = seg->linedef;
+    sector_t*		front;
+    sector_t*		back;
+    fixed_t		opentop;
+    fixed_t		openbottom;
+    fixed_t		frac;
+    fixed_t		slope;
 
     // Backsector may be NULL if this is an "impassible
     // glass" hack line.
@@ -385,7 +389,7 @@ static boolean P_SightCrossLine (seg_t* seg)
     if (openbottom >= opentop)
 	return false;		// stop
 
-    frac = P_InterceptVector2 (&strace, &divl);
+    frac = P_InterceptVector2 (&strace, divl);
 
     if (front->floorheight != back->floorheight)
     {
@@ -735,10 +739,20 @@ typedef struct
 
 boolean P_SightTrace (int bspnum, const sighttrace_t* t);
 
+// The routine has found the sight line's ends on both sides of the line,
+// with P_DivlineSide's arithmetic: id's code from there
 __attribute__((used, noinline)) boolean
 P_SightCrossedLineAt (const sightseg_t* ss)
 {
-    return P_SightCrossLine (&segs[ss - sightsegs]);
+    seg_t*		seg = &segs[ss - sightsegs];
+    const line_t*	line = seg->linedef;
+    divline_t		divl;
+
+    divl.x = line->v1->x;
+    divl.y = line->v1->y;
+    divl.dx = line->v2->x - line->v1->x;
+    divl.dy = line->v2->y - line->v1->y;
+    return P_SightCrossedLine (seg, &divl);
 }
 
 __asm__ (

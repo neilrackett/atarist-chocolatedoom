@@ -40,7 +40,11 @@ from the desktop has none). `-file`, `-deh`, `-warp`, `-skill`,
 - **Game speed.** Up to a second of tics is run before each frame (on a
   PC, 3), so the game keeps its speed down to 1 frame a second, with
   fewer frames, rather than slowing down.
-- **Low detail** (F5) works, and is the faster way to play.
+- **Low detail** (F5) works, is the faster way to play, and is the
+  default here (`detaillevel 0` in `DEFAULT.CFG` for high). Its 3D view
+  is drawn in pixel pairs, and STDL converts it as pairs, 56
+  instructions a group of 16 pixels against 74; anything drawn over it
+  (messages, the menu) is converted whole.
 - **Effects** play on the DMA sound (STE, TT, Falcon), on STDL's four
   voices, mixed from the VBL so they keep playing however slowly the
   frames come. They are mono: stereo separation is not heard. A plain ST
@@ -68,14 +72,20 @@ ms a frame:
 
 | | size 9 (default) | size 10 |
 | --- | --- | --- |
-| high detail | 92 | 107 |
-| low detail | 69 | 79 |
+| high detail | 91 | 106 |
+| low detail (default) | 65 | 75 |
 
-In real play the game logic runs too, every tic: 5.8-6.9 ms a tic here
-(whole demos 1 and 3, `-nodraw`; 9.1-10.8 before the work below). At a real TT's pace
-(`-playdemo demo3 -benchtics 600 -benchpace 190`) the game runs at full
-speed, at 2.8 frames a second in low detail and 2.0 in high (1.1 and 0.9
-at 87-93% speed before). A Falcon (VGA) takes about twice a TT's time.
+In real play the game logic runs too, every tic: 4.7-6.1 ms a tic here
+(whole demos 1 to 3, `-nodraw`; 9.1-10.8 before the work below). At a
+real TT's pace (`-playdemo demo3 -benchtics 600 -benchpace 190`, size
+9) the game runs at full speed, at 3.4 frames a second in low detail
+and 2.35 in high (1.1 and 0.9 at 87-93% speed before). A Falcon (VGA)
+takes about twice a TT's time: 153 ms a frame in low detail.
+
+TTDOOM, the same engine's TT port, draws a taller view (320x208 at
+size 10, its 240 rows standing for 200) and runs demo1 in 78 ms low and
+116 high there; its game logic is about 6% faster (6.0 ms a tic on
+demo3's first 600 against 6.4).
 
 Where it comes from, against the port as first built (high detail,
 size 9: 201 ms):
@@ -104,8 +114,13 @@ size 9: 201 ms):
   records of the nodes and lines made at each level's load, and on a
   68020 as one assembler routine laid out for the instruction cache
   (16-bit, so only on a map under 32767 units across); thinkers that
-  only count their state's tics down handled in `P_RunThinkers`'s loop;
-  `R_PointOnSide` inline in `R_PointInSubsector`: 30% off a tic.
+  only count their state's tics down, or stand still for ever, handled
+  in `P_RunThinkers`'s loop; `R_PointInSubsector`'s walk in assembler
+  on the sight check's compact nodes; the sight check's lines crossing
+  handed to id's code without testing them again; the gamepad read
+  only after it changes, not 15 buttons and 6 axes a tic: 45% off a tic.
+- Low detail's view converted as pixel pairs (STDL's
+  `STDL_SDL2_RenderCopyPairs`): 3.5 ms a frame.
 
 ## Building
 
@@ -156,7 +171,8 @@ ARGS="-timedemo demo1 -benchtics 600 -framehash" \
     tools/atari/run.sh d1 dist-atari/CHOCTT.TOS "waitfor realtics"
 ```
 
-With DOOM1.WAD 1.9 and the default settings, 600 tics: demo1 state
+With DOOM1.WAD 1.9 and the default settings but high detail
+(`detaillevel 0`, the PC's default), 600 tics: demo1 state
 `5d883da0` frames `3edfdd5a`, demo2 `a32fc838` / `414f485a`, demo3
 `7f557ea2` / `4d508737`. The whole demos: demo1 `565a4537`, demo2
 `d32c8c31`, demo3 `249c2864`. The frames' hashes of a TT build differ
@@ -165,4 +181,9 @@ builds, with demo3 apart, where one pixel depends on memory layout (Doom
 reads past a column's end). `-playdemo demoN -benchtics N` ends real play
 at tic N with frames a second and the game's speed, and `-benchpace 190`
 runs the game's clock 1.9 times as fast, as a real TT plays under
-Hatari's faster one.
+Hatari's faster one. `-sdl2check` turns on STDL's screen check, which
+compares every page with the screen Doom drew before it is shown, and
+prints the count of those unlike it at the end (none, for whole demos
+1-3 in low detail on a TT and demo3 on a Falcon and stretched to 4:3);
+`-nopairs` converts the low-detail view as any other pixels, for
+timing.

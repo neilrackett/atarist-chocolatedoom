@@ -231,6 +231,15 @@ boolean P_CheckSight (mobj_t* t1, mobj_t* t2);
 #ifdef ATARI
 // The sight check's records, made at each level's load (p_sight.c)
 void P_InitSightRecords (void);
+
+// A node as the sight check and R_PointInSubsector's walk read it (p_sight.c)
+typedef struct
+{
+    short		x, y, dx, dy;
+    unsigned short	children[2];
+} sightnode_t;
+
+extern sightnode_t*	sightnodes;
 #endif
 void 	P_UseLines (player_t* player);
 

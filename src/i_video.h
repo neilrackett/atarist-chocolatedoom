@@ -83,6 +83,10 @@ void I_EnableLoadingDisk(int xoffs, int yoffs);
 // A box of I_VideoBuffer changed since the last I_FinishUpdate: the
 // Atari screen converts only those (i_video_atari.c).
 void I_MarkRect(int x, int y, int w, int h);
+
+// The 3D view's box, drawn this frame: in low detail (pairs) its
+// pixels come in pairs, which the add-on converts faster.
+void I_MarkView(int x, int y, int w, int h, boolean pairs);
 #endif
 
 extern char *video_driver;

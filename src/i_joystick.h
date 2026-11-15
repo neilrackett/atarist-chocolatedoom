@@ -108,6 +108,9 @@ extern int joystick_look_sensitivity;
 void I_InitJoystick(void);
 void I_ShutdownJoystick(void);
 void I_UpdateJoystick(void);
+#ifdef ATARI
+void I_AtariGamepadEvent(void);
+#endif
 
 void I_BindJoystickVariables(void);
 
