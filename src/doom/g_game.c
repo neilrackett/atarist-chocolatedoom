@@ -1975,9 +1975,31 @@ G_InitNew
 #define DEMOMARKER		0x80
 
 
+#if defined(ATARI) || defined(CHOC_BENCH)
+// -benchtics: a timedemo ends at this tic (0: at the demo's end)
+static int benchtics;
+#endif
+
 void G_ReadDemoTiccmd (ticcmd_t* cmd) 
 { 
+#if defined(ATARI) || defined(CHOC_BENCH)
+    // -playdemo -benchtics: real play's frames a second, and the game's
+    // speed, which falls below full when frames take too long to run
+    // every tic due
+    if (benchtics > 0 && gametic >= benchtics && !timingdemo)
+    {
+        extern int bench_frames;    // d_main.c
+        int realtics = I_GetTime() - starttime;
+
+        I_Error("played %i gametics in %i realtics, %i frames: %.2f fps, "
+                "%.0f%% speed", gametic, realtics, bench_frames,
+                (double) bench_frames * TICRATE / realtics,
+                100.0 * gametic / realtics);
+    }
+    if (*demo_p == DEMOMARKER || (benchtics > 0 && gametic >= benchtics))
+#else
     if (*demo_p == DEMOMARKER) 
+#endif
     {
 	// end of demo data stream 
 	G_CheckDemoStatus (); 
@@ -2185,6 +2207,14 @@ static const char *defdemoname;
  
 void G_DeferedPlayDemo(const char *name)
 { 
+#if defined(ATARI) || defined(CHOC_BENCH)
+    int p = M_CheckParmWithArgs("-benchtics", 1);
+
+    if (p > 0)
+    {
+        benchtics = atoi(myargv[p + 1]);
+    }
+#endif
     defdemoname = name; 
     gameaction = ga_playdemo; 
 } 
@@ -2330,6 +2360,25 @@ void G_TimeDemo (char* name)
 
     nodrawers = M_CheckParm ("-nodraw");
 
+#if defined(ATARI) || defined(CHOC_BENCH)
+    {
+        //!
+        // @category obscure
+        // @arg <tics>
+        //
+        // With -timedemo: end the demo at this tic, for timings and
+        // profiles that take less time than a whole demo (Atari).
+        //
+
+        int p = M_CheckParmWithArgs("-benchtics", 1);
+
+        if (p > 0)
+        {
+            benchtics = atoi(myargv[p + 1]);
+        }
+    }
+#endif
+
     timingdemo = true; 
     singletics = true; 
 
@@ -2348,6 +2397,56 @@ void G_TimeDemo (char* name)
 =================== 
 */ 
  
+#if defined(ATARI) || defined(CHOC_BENCH)
+extern unsigned int bench_framehash;    // d_main.c
+
+// A hash of the game's state, for a timedemo's result: every thing's
+// position, angle, momentum, health and type, the players' and the
+// random number index, so a change to the game logic that moves
+// anything shows (the Atari port's optimisations must not).
+static unsigned int G_StateHash(void)
+{
+    unsigned int h = 2166136261u;
+    thinker_t *th;
+    mobj_t *mo;
+    int i, n = 0;
+
+    // An error while a level loads runs this from the exit hook, and the
+    // thinker list may be half made then.
+    if (gamestate != GS_LEVEL)
+    {
+        return 0;
+    }
+
+#define HASH(v) (h = (h ^ (unsigned int) (v)) * 16777619u)
+
+    for (th = thinkercap.next; th != &thinkercap; th = th->next)
+    {
+        if (th->function.acp1 == (actionf_p1) P_MobjThinker)
+        {
+            mo = (mobj_t *) th;
+            HASH(mo->x); HASH(mo->y); HASH(mo->z); HASH(mo->angle);
+            HASH(mo->momx); HASH(mo->momy); HASH(mo->momz);
+            HASH(mo->health); HASH(mo->type);
+            ++n;
+        }
+    }
+    for (i = 0; i < MAXPLAYERS; ++i)
+    {
+        if (playeringame[i])
+        {
+            HASH(players[i].health); HASH(players[i].armorpoints);
+            HASH(players[i].viewz); HASH(players[i].killcount);
+        }
+    }
+    HASH(n);
+    HASH(P_Random());
+
+#undef HASH
+    return h;
+}
+#endif
+
 boolean G_CheckDemoStatus (void) 
 { 
     int             endtime; 
@@ -2365,8 +2464,14 @@ boolean G_CheckDemoStatus (void)
         timingdemo = false;
         demoplayback = false;
 
+#if defined(ATARI) || defined(CHOC_BENCH)
+	I_Error ("timed %i gametics in %i realtics (%f fps) state %08x "
+                 "frames %08x", gametic, realtics, fps, G_StateHash(),
+                 bench_framehash);
+#else
 	I_Error ("timed %i gametics in %i realtics (%f fps)",
                  gametic, realtics, fps);
+#endif
     } 
 	 
     if (demoplayback) 

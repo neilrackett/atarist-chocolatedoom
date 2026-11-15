@@ -35,6 +35,9 @@
 
 static opl_driver_t *drivers[] =
 {
+#ifdef ATARI
+    &opl_atari_driver,
+#endif
 #if (defined(__i386__) || defined(__x86_64__)) && defined(HAVE_IOPERM)
     &opl_linux_driver,
 #endif
@@ -244,6 +247,13 @@ void OPL_WriteRegister(int reg, int value)
         OPL_WritePort(OPL_REGISTER_PORT, reg);
     }
 
+#ifdef ATARI
+    // The Atari driver plays the writes on the YM2149 (opl_atari.c):
+    // there is no chip to wait for, and the reads would cost the VBL.
+    OPL_WritePort(OPL_DATA_PORT, value);
+    return;
+#endif
+
     // For timing, read the register port six times after writing the
     // register number to cause the appropriate delay
 
@@ -447,6 +457,16 @@ void OPL_Unlock(void)
     }
 }
 
+#ifdef ATARI
+
+// No threads, and no chip to wait for: the Atari driver's status
+// register answers OPL_Detect at once (opl_atari.c).
+void OPL_Delay(uint64_t us)
+{
+}
+
+#else
+
 typedef struct
 {
     int finished;
@@ -511,6 +531,8 @@ void OPL_Delay(uint64_t us)
     SDL_DestroyMutex(delay_data.mutex);
     SDL_DestroyCond(delay_data.cond);
 }
+
+#endif // ATARI
 
 void OPL_SetPaused(int paused)
 {

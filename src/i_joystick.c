@@ -40,17 +40,29 @@ static SDL_Joystick *joystick = NULL;
 
 // Standard default.cfg Joystick enable/disable
 
+#ifdef ATARI
+// There is no setup program on an Atari, so the joystick port (joystick
+// 0, STDL's, or an Xpad pad) is on from the start, as a game controller.
+static int usejoystick = 1;
+static int use_gamepad = 1;
+#else
 static int usejoystick = 0;
 
 // Use SDL_gamecontroller interface for the selected device
 static int use_gamepad = 0;
+#endif
 
 // SDL_GameControllerType of gamepad
 static int gamepad_type = 0;
 
 // SDL GUID and index of the joystick to use.
+#ifdef ATARI
+static char *joystick_guid = "5354444c000000000000000000000000";
+static int joystick_index = 0;
+#else
 static char *joystick_guid = "";
 static int joystick_index = -1;
+#endif
 
 // Which joystick axis to use for horizontal movement, and whether to
 // invert the direction:

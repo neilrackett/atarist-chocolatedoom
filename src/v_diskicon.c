@@ -140,6 +140,10 @@ void V_DrawDiskIcon(void)
                    disk_data, LOADING_DISK_W,
                    LOADING_DISK_W, LOADING_DISK_H);
         disk_drawn = true;
+#ifdef ATARI
+        I_MarkRect(loading_disk_xoffs, loading_disk_yoffs,
+                   LOADING_DISK_W, LOADING_DISK_H);
+#endif
     }
 
     recent_bytes_read = 0;
@@ -155,6 +159,11 @@ void V_RestoreDiskBackground(void)
                    LOADING_DISK_W, LOADING_DISK_H);
 
         disk_drawn = false;
+#ifdef ATARI
+        // Drawn back for the next frame
+        I_MarkRect(loading_disk_xoffs, loading_disk_yoffs,
+                   LOADING_DISK_W, LOADING_DISK_H);
+#endif
     }
 }
 

@@ -124,6 +124,11 @@ static byte *AutoAllocMemory(int *size, int default_ram, int min_ram)
     return zonemem;
 }
 
+#ifdef ATARI
+// The zone is sized from the machine's free memory (i_atari.c)
+byte *I_AtariZoneBase(int *size, int mb);
+#endif
+
 byte *I_ZoneBase (int *size)
 {
     byte *zonemem;
@@ -138,6 +143,12 @@ byte *I_ZoneBase (int *size)
     //
 
     p = M_CheckParmWithArgs("-mb", 1);
+
+#ifdef ATARI
+    zonemem = I_AtariZoneBase(size, p > 0 ? atoi(myargv[p+1]) : 0);
+    printf("zone memory: %p, %x allocated for zone\n", zonemem, *size);
+    return zonemem;
+#endif
 
     if (p > 0)
     {
@@ -275,6 +286,15 @@ void I_Quit (void)
 
 static boolean already_quitting = false;
 
+#ifdef ATARI
+static const char *atari_error_message = "";
+
+static const char *I_AtariErrorMessage(void)
+{
+    return atari_error_message;
+}
+#endif
+
 void I_Error (const char *error, ...)
 {
     char msgbuf[512];
@@ -285,6 +305,18 @@ void I_Error (const char *error, ...)
     if (already_quitting)
     {
         fprintf(stderr, "Warning: recursive call to I_Error detected.\n");
+#ifdef ATARI
+        // The first message isn't out yet (it waits for the desktop's
+        // screen): both, then
+        {
+            static char msgbuf2[512];
+
+            va_start(argptr, error);
+            M_vsnprintf(msgbuf2, sizeof(msgbuf2), error, argptr);
+            va_end(argptr);
+            fprintf(stderr, "%s\n%s\n", I_AtariErrorMessage(), msgbuf2);
+        }
+#endif
         exit(-1);
     }
     else
@@ -292,7 +324,8 @@ void I_Error (const char *error, ...)
         already_quitting = true;
     }
 
-    // Message first.
+    // Message first. (On an Atari it shows on the game's screen, if at
+    // all, and again on the desktop's below.)
     va_start(argptr, error);
     //fprintf(stderr, "\nError: ");
     vfprintf(stderr, error, argptr);
@@ -305,6 +338,9 @@ void I_Error (const char *error, ...)
     memset(msgbuf, 0, sizeof(msgbuf));
     M_vsnprintf(msgbuf, sizeof(msgbuf), error, argptr);
     va_end(argptr);
+#ifdef ATARI
+    atari_error_message = msgbuf;
+#endif
 
     // Shutdown. Here might be other errors.
 
@@ -328,14 +364,30 @@ void I_Error (const char *error, ...)
     //
     exit_gui_popup = !M_ParmExists("-nogui");
 
+#ifdef ATARI
+    // On an Atari the message goes on the desktop's screen once the game's
+    // is gone, and waits for a key there: a program started from the
+    // desktop has no other console to leave it on.
+    SDL_Quit();
+    fprintf(stderr, "\n%s\n\n", msgbuf);
+    fflush(stderr);
+    if (exit_gui_popup)
+    {
+        I_AtariWaitKey();
+    }
+    exit(-1);
+#endif
+
     // Pop up a GUI dialog box to show the error message, if the
     // game was not run from the console (and the user will
     // therefore be unable to otherwise see the message).
+#ifndef ATARI
     if (exit_gui_popup && !I_ConsoleStdout())
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                  PACKAGE_STRING, msgbuf, NULL);
     }
+#endif
 
     // abort();
 

@@ -77,6 +77,10 @@ void V_MarkRect(int x, int y, int width, int height)
     {
         M_AddToBox (dirtybox, x, y); 
         M_AddToBox (dirtybox, x + width-1, y + height-1); 
+#ifdef ATARI
+        // The Atari screen converts only what was drawn (i_video_atari.c)
+        I_MarkRect(x, y, width, height);
+#endif
     }
 } 
  
@@ -537,6 +541,9 @@ void V_DrawFilledBox(int x, int y, int w, int h, int c)
     pixel_t *buf, *buf1;
     int x1, y1;
 
+#ifdef ATARI
+    I_MarkRect(x, y, w, h);
+#endif
     buf = I_VideoBuffer + SCREENWIDTH * y + x;
 
     for (y1 = 0; y1 < h; ++y1)
@@ -557,6 +564,9 @@ void V_DrawHorizLine(int x, int y, int w, int c)
     pixel_t *buf;
     int x1;
 
+#ifdef ATARI
+    I_MarkRect(x, y, w, 1);
+#endif
     buf = I_VideoBuffer + SCREENWIDTH * y + x;
 
     for (x1 = 0; x1 < w; ++x1)
@@ -570,6 +580,9 @@ void V_DrawVertLine(int x, int y, int h, int c)
     pixel_t *buf;
     int y1;
 
+#ifdef ATARI
+    I_MarkRect(x, y, 1, h);
+#endif
     buf = I_VideoBuffer + SCREENWIDTH * y + x;
 
     for (y1 = 0; y1 < h; ++y1)
@@ -595,6 +608,12 @@ void V_DrawBox(int x, int y, int w, int h, int c)
 void V_DrawRawScreen(pixel_t *raw)
 {
     memcpy(dest_screen, raw, SCREENWIDTH * SCREENHEIGHT * sizeof(*dest_screen));
+#ifdef ATARI
+    if (dest_screen == I_VideoBuffer)
+    {
+        I_MarkRect(0, 0, SCREENWIDTH, SCREENHEIGHT);
+    }
+#endif
 }
 
 //

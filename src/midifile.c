@@ -440,6 +440,9 @@ static boolean ReadTrack(midi_track_t *track, FILE *stream)
     midi_event_t *new_events;
     midi_event_t *event;
     unsigned int last_event_type;
+#ifdef ATARI
+    unsigned int capacity = 0;
+#endif
 
     track->num_events = 0;
     track->events = NULL;
@@ -457,11 +460,25 @@ static boolean ReadTrack(midi_track_t *track, FILE *stream)
 
     for (;;)
     {
+#ifdef ATARI
+        // Twice the room when it runs out: an event at a time, a song's
+        // thousands of reallocs left MiNTLib's heap in pieces on an STE
+        // and a Falcon, until one failed.
+
+        if (track->num_events == capacity)
+        {
+            capacity = capacity ? capacity * 2 : 64;
+            new_events = I_Realloc(track->events,
+                                   sizeof(midi_event_t) * capacity);
+            track->events = new_events;
+        }
+#else
         // Resize the track slightly larger to hold another event:
 
         new_events = I_Realloc(track->events, 
                              sizeof(midi_event_t) * (track->num_events + 1));
         track->events = new_events;
+#endif
 
         // Read the next event:
 
@@ -581,22 +598,26 @@ void MIDI_FreeFile(midi_file_t *file)
     free(file);
 }
 
-midi_file_t *MIDI_LoadFile(char *filename)
+#ifdef ATARI
+// A MIDI file already in memory, read through a stream on it: TOS has no
+// temporary folder to write the converted song to.
+midi_file_t *MIDI_LoadMemory(void *data, size_t len)
 {
-    midi_file_t *file;
     FILE *stream;
 
-    file = malloc(sizeof(midi_file_t));
-
-    if (file == NULL)
+    stream = fmemopen(data, len, "rb");
+    if (stream == NULL)
     {
         return NULL;
     }
 
-    file->tracks = NULL;
-    file->num_tracks = 0;
-    file->buffer = NULL;
-    file->buffer_size = 0;
+    return MIDI_LoadStream(stream);
+}
+#endif
+
+midi_file_t *MIDI_LoadFile(char *filename)
+{
+    FILE *stream;
 
     // Open file
 
@@ -605,9 +626,30 @@ midi_file_t *MIDI_LoadFile(char *filename)
     if (stream == NULL)
     {
         fprintf(stderr, "MIDI_LoadFile: Failed to open '%s'\n", filename);
-        MIDI_FreeFile(file);
         return NULL;
     }
+
+    return MIDI_LoadStream(stream);
+}
+
+// Read a MIDI file from a stream, which is closed afterwards.
+
+midi_file_t *MIDI_LoadStream(FILE *stream)
+{
+    midi_file_t *file;
+
+    file = malloc(sizeof(midi_file_t));
+
+    if (file == NULL)
+    {
+        fclose(stream);
+        return NULL;
+    }
+
+    file->tracks = NULL;
+    file->num_tracks = 0;
+    file->buffer = NULL;
+    file->buffer_size = 0;
 
     // Read MIDI file header
 

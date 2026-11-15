@@ -79,6 +79,12 @@ void I_StartTic (void);
 
 void I_EnableLoadingDisk(int xoffs, int yoffs);
 
+#ifdef ATARI
+// A box of I_VideoBuffer changed since the last I_FinishUpdate: the
+// Atari screen converts only those (i_video_atari.c).
+void I_MarkRect(int x, int y, int w, int h);
+#endif
+
 extern char *video_driver;
 extern boolean screenvisible;
 

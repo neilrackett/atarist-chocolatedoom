@@ -54,6 +54,11 @@ void I_Quit (void) NORETURN;
 
 void I_Error (const char *error, ...) NORETURN PRINTF_ATTR(1, 2);
 
+#ifdef ATARI
+// "Press any key", and wait for one (i_atari.c)
+void I_AtariWaitKey(void);
+#endif
+
 void I_Tactile (int on, int off, int total);
 
 void *I_Realloc(void *ptr, size_t size);

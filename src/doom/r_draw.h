@@ -37,6 +37,12 @@ extern byte*		dc_source;
 // The span blitting interface.
 // Hook in assembler or system specific BLT
 //  here.
+#if defined(ATARI) && defined(__M68020__)
+// The column and span drawers in assembler (src/atari/r_draw_m68k.c)
+#define R_DRAW_M68K
+void	R_InitColormapsW (int lump);
+#endif
+
 void 	R_DrawColumn (void);
 void 	R_DrawColumnLow (void);
 

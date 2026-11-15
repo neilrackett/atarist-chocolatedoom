@@ -885,6 +885,11 @@ void R_RenderPlayerView (player_t* player)
     
     R_DrawMasked ();
 
+#ifdef ATARI
+    // The Atari screen converts only what was drawn (i_video_atari.c)
+    I_MarkRect(viewwindowx, viewwindowy, scaledviewwidth, viewheight);
+#endif
+
     // Check for new console commands.
     NetUpdate ();				
 }

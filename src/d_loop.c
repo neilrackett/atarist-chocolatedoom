@@ -160,6 +160,19 @@ static boolean BuildNewTic(void)
 
     if (new_sync)
     {
+#ifdef ATARI
+       // An Atari draws a frame in a few tics' time, not one: up to a
+       // second of tics may build up, so the game keeps its speed down
+       // to 1 frame a second (it slowed below 12, at 3 tics a frame).
+       // Not without limit: where a tic's game logic takes longer than
+       // a tic (a 68000), each frame would have more to catch up.
+
+       if (!net_client_connected && maketic - gameticdiv >= TICRATE)
+           return false;
+
+       if (net_client_connected && maketic - gameticdiv > 8)
+           return false;
+#else
        // If playing single player, do not allow tics to buffer
        // up very far
 
@@ -170,6 +183,7 @@ static boolean BuildNewTic(void)
 
        if (maketic - gameticdiv > 8)
            return false;
+#endif
     }
     else
     {

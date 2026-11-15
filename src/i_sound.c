@@ -85,10 +85,14 @@ static int snd_mport = 0;
 
 static const sound_module_t *sound_modules[] =
 {
+#ifdef ATARI
+    &sound_atari_module,
+#else
 #ifndef DISABLE_SDL2MIXER
     &sound_sdl_module,
 #endif // DISABLE_SDL2MIXER
     &sound_pcsound_module,
+#endif
     NULL,
 };
 

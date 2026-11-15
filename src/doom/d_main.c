@@ -58,6 +58,7 @@
 #include "i_system.h"
 #include "i_timer.h"
 #include "i_video.h"
+#include "i_swap.h"
 
 #include "g_game.h"
 
@@ -402,6 +403,72 @@ boolean D_GrabMouseCallback(void)
 //
 //  D_RunFrame
 //
+#if defined(ATARI) || defined(CHOC_BENCH)
+// -framehash: a hash of every frame drawn (but a wipe's, which follows
+// the clock), for checking that a change to the renderer draws the same
+// pixels; a timedemo's result gives it (g_game.c).
+unsigned int bench_framehash;
+int bench_frames;
+static int bench_framehash_on = -1;
+
+static void D_BenchFrameHash(void)
+{
+    const unsigned int *p = (const unsigned int *) I_VideoBuffer;
+    unsigned int h = bench_framehash;
+    int i;
+
+    ++bench_frames;
+
+    if (bench_framehash_on < 0)
+    {
+        //!
+        // @category obscure
+        //
+        // Hash every frame drawn, for a timedemo's result.
+        //
+
+        int p = M_CheckParm("-framehash");
+
+        bench_framehash_on = p > 0;
+        if (p > 0 && p + 1 < myargc && myargv[p + 1][0] == '2')
+        {
+            bench_framehash_on = 2;
+        }
+    }
+    if (!bench_framehash_on)
+    {
+        return;
+    }
+
+    for (i = 0; i < SCREENWIDTH * SCREENHEIGHT / 4; ++i)
+    {
+        // big-endian on every machine, so hashes compare across them
+        h = (h ^ SDL_SwapBE32(p[i])) * 16777619u;
+    }
+    bench_framehash = h;
+
+    // -framehash 2: each frame's running hash too, to find the first
+    // frame two builds draw differently
+    if (bench_framehash_on > 1)
+    {
+        static int frame, shot = -2;
+
+        if (shot == -2)
+        {
+            int p = M_CheckParmWithArgs("-benchshot", 1);
+
+            shot = p > 0 ? atoi(myargv[p + 1]) : -1;
+        }
+        if (frame == shot)
+        {
+            M_WriteFile("SHOT.RAW", I_VideoBuffer,
+                        SCREENWIDTH * SCREENHEIGHT);
+        }
+        printf("F %d %08x\n", frame++, h);
+    }
+}
+#endif
+
 void D_RunFrame()
 {
     int nowtime;
@@ -445,6 +512,9 @@ void D_RunFrame()
             wipestart = I_GetTime () - 1;
         } else {
             // normal update
+#if defined(ATARI) || defined(CHOC_BENCH)
+            D_BenchFrameHash();
+#endif
             I_FinishUpdate ();              // page flip or blit buffer
         }
     }

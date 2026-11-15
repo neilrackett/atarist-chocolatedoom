@@ -18,6 +18,8 @@
 #ifndef MIDIFILE_H
 #define MIDIFILE_H
 
+#include <stdio.h>
+
 typedef struct midi_file_s midi_file_t;
 typedef struct midi_track_iter_s midi_track_iter_t;
 
@@ -187,6 +189,10 @@ typedef struct
 // Load a MIDI file.
 
 midi_file_t *MIDI_LoadFile(char *filename);
+midi_file_t *MIDI_LoadStream(FILE *stream);
+#ifdef ATARI
+midi_file_t *MIDI_LoadMemory(void *data, size_t len);
+#endif
 
 // Free a MIDI file.
 

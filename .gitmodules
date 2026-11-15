@@ -1,3 +1,6 @@
 [submodule "quickcheck"]
 	path = quickcheck
 	url = https://github.com/chocolate-doom/quickcheck.git
+[submodule "extern/stdl"]
+	path = extern/stdl
+	url = https://github.com/neilrackett/atarist-stdl

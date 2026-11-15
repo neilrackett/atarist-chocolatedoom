@@ -1,0 +1,130 @@
+################################################################
+#
+# Chocolate Doom for the Atari ST, TT and Falcon, on STDL's SDL2 add-on
+#
+#   make -f Makefile.atari          both programs, in dist-atari/
+#   make -f Makefile.atari tt       dist-atari/CHOCTT.TOS: TT and Falcon,
+#                                   68030 code (any 68020 to 68060)
+#   make -f Makefile.atari st       dist-atari/CHOCST.TOS: 68000 code, every
+#                                   machine: an ST, an STE, a TT, a Falcon
+#   make -f Makefile.atari clean    removes build-atari/ and those programs
+#
+# Run on the host, this Makefile runs itself in atarist-toolkit-docker
+# through stcmd (gcc 4.6.4, m68k-atari-mint), from the repository's root.
+# STDL is the submodule in extern/stdl, built here with the same compiler.
+# build-atari/CHOCTT.TOS and CHOCST.TOS are the programs with their
+# symbols, for Hatari's debugger and profiler (tools/atari/prof.sh).
+#
+################################################################
+
+CROSS   = m68k-atari-mint-
+CC      = $(CROSS)gcc
+STRIP   = $(CROSS)strip
+STDL    = extern/stdl
+
+.DEFAULT_GOAL := all
+.PHONY: all tt st clean
+
+ifeq ($(shell command -v $(CC) 2>/dev/null),)
+
+# Not in the toolchain container: run the build there
+export STCMD_NO_TTY = 1
+all tt st clean:
+	stcmd make -f Makefile.atari $(MAKEOVERRIDES) $@
+
+else
+
+OBJROOT = build-atari
+DISTDIR = dist-atari
+
+# The game: Chocolate Doom's own sources, less the SDL_mixer, SDL_net,
+# textscreen, PC-speaker and high-resolution modules, which have no path
+# on the add-on; the Atari layer in src/atari replaces those.
+COMMON = i_main.c i_system.c m_argv.c m_misc.c
+GAME = aes_prng.c d_event.c d_iwad.c d_loop.c d_mode.c deh_str.c \
+       i_glob.c i_input.c i_joystick.c i_oplmusic.c i_sound.c i_timer.c \
+       midifallback.c midifile.c mus2mid.c m_bbox.c m_cheat.c m_config.c \
+       m_controls.c m_fixed.c net_client.c net_common.c \
+       net_io.c net_loop.c net_packet.c net_petname.c net_query.c \
+       net_sdl.c net_structrw.c p_rejectpad.c sha1.c memio.c \
+       tables.c v_diskicon.c v_video.c w_checksum.c w_main.c w_wad.c \
+       w_file.c w_file_stdc.c w_merge.c z_zone.c
+DEH = deh_io.c deh_main.c deh_mapping.c deh_text.c
+DOOM = am_map.c deh_ammo.c deh_bexstr.c deh_cheat.c deh_doom.c deh_frame.c \
+       deh_misc.c deh_ptr.c deh_sound.c deh_thing.c deh_weapon.c d_items.c \
+       d_main.c d_net.c doomdef.c doomstat.c dstrings.c f_finale.c \
+       f_wipe.c g_game.c hu_lib.c hu_stuff.c info.c m_menu.c m_random.c \
+       p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c \
+       p_map.c p_maputl.c p_mobj.c p_plats.c p_pspr.c p_saveg.c p_setup.c \
+       p_sight.c p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c \
+       r_data.c r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_things.c \
+       s_sound.c sounds.c statdump.c st_lib.c st_stuff.c wi_stuff.c
+OPL = opl.c opl_queue.c
+ATARI = i_atari_start.c i_atari.c i_video_atari.c i_sound_atari.c \
+        i_endoom_atari.c net_atari.c opl_atari.c r_draw_m68k.c
+
+SRCS = $(addprefix src/,$(COMMON) $(GAME) $(DEH)) \
+       $(addprefix src/doom/,$(DOOM)) $(addprefix opl/,$(OPL)) \
+       $(addprefix src/atari/,$(ATARI))
+
+INCLUDES = -Isrc/atari -Isrc/atari/compat -Isrc -Isrc/doom -Iopl \
+           -I$(STDL)/addons/sdl2/include/SDL2 -I$(STDL)/include
+DEFINES  = -DATARI -D_GNU_SOURCE -DHAVE_CONFIG_H -DDISABLE_SDL2MIXER -DDISABLE_SDL2NET
+WARN     = -Wall -Wno-unused -Werror=implicit-function-declaration
+CFLAGS   = -std=gnu99 -O2 -fomit-frame-pointer $(WARN) $(DEFINES) $(INCLUDES) \
+           -MMD -MP
+
+# TT and Falcon: 68020 code without the FPU (a Falcon may have none),
+# linked against the 68000 libraries, which assume no FPU either.
+CFLAGS_TT = $(CFLAGS) -m68020-60 -msoft-float
+LIBS_TT   = $(STDL)/libstdl-sdl2.a $(STDL)/libstdl.a
+# Every machine: 68000 code and the add-on's experimental build for it
+CFLAGS_ST = $(CFLAGS) -m68000
+LIBS_ST   = $(STDL)/libstdl-sdl2-st.a $(STDL)/libstdl.a
+
+OBJS_TT = $(SRCS:%.c=$(OBJROOT)/tt/%.o)
+OBJS_ST = $(SRCS:%.c=$(OBJROOT)/st/%.o)
+
+STDL_SRCS = $(wildcard $(STDL)/src/*.c $(STDL)/src/*.s $(STDL)/src/*.S \
+                       $(STDL)/include/stdl/*.h $(STDL)/addons/sdl2/src/*.[chsS] \
+                       $(STDL)/addons/sdl2/include/SDL2/*.h \
+                       $(STDL)/lib/xpad/src/*.c)
+
+all: tt st
+tt: $(DISTDIR)/CHOCTT.TOS
+st: $(DISTDIR)/CHOCST.TOS
+
+$(STDL)/libstdl-sdl2.a: $(STDL_SRCS)
+	$(MAKE) -C $(STDL) libstdl-sdl2.a libstdl.a
+$(STDL)/libstdl-sdl2-st.a: $(STDL_SRCS)
+	$(MAKE) -C $(STDL) libstdl-sdl2-st.a libstdl.a
+$(STDL)/libstdl.a: $(STDL)/libstdl-sdl2.a
+
+$(OBJROOT)/tt/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS_TT) -c -o $@ $<
+$(OBJROOT)/st/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS_ST) -c -o $@ $<
+
+# The entry, 68000 code in both: the TT and Falcon build checks the CPU
+# there before any of its 68020 code runs.
+$(OBJROOT)/tt/src/atari/i_atari_start.o: src/atari/i_atari_start.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m68000 -DATARI_NEEDS_68020 -c -o $@ $<
+
+$(DISTDIR)/CHOCTT.TOS: $(OBJS_TT) $(LIBS_TT)
+	@mkdir -p $(dir $@)
+	$(CC) -m68000 -o $(OBJROOT)/CHOCTT.TOS $(OBJS_TT) $(LIBS_TT)
+	$(STRIP) -o $@ $(OBJROOT)/CHOCTT.TOS
+$(DISTDIR)/CHOCST.TOS: $(OBJS_ST) $(LIBS_ST)
+	@mkdir -p $(dir $@)
+	$(CC) -m68000 -o $(OBJROOT)/CHOCST.TOS $(OBJS_ST) $(LIBS_ST)
+	$(STRIP) -o $@ $(OBJROOT)/CHOCST.TOS
+
+clean:
+	rm -rf $(OBJROOT) $(DISTDIR)/CHOCTT.TOS $(DISTDIR)/CHOCST.TOS
+
+-include $(OBJS_TT:.o=.d) $(OBJS_ST:.o=.d)
+
+endif

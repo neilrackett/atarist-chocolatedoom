@@ -28,6 +28,17 @@
 #include "m_argv.h"
 #include "m_config.h"
 
+#ifdef ATARI
+// The Atari event loop (i_video_atari.c) reads a frame's events ahead,
+// so a key press can be matched with the text input after it, which
+// SDL2 finds with SDL_PeepEvents.
+boolean I_AtariPeekEvent(SDL_Event *ev);
+
+// STDL's mouse has no relative mode: its motion events carry the
+// IKBD's own deltas, summed here for I_ReadMouse.
+static int mouse_dx, mouse_dy;
+#endif
+
 static const int scancode_translate_table[] = SCANCODE_TO_KEYS_ARRAY;
 
 // Lookup table for mapping ASCII characters to their equivalent when
@@ -220,9 +231,14 @@ static int GetTypedChar(SDL_Keysym *sym)
         //
         // So we're stuck with this as a rather fragile alternative.
 
+#ifdef ATARI
+        if (I_AtariPeekEvent(&next_event)
+         && next_event.type == SDL_TEXTINPUT)
+#else
         if (SDL_PeepEvents(&next_event, 1, SDL_PEEKEVENT,
                            SDL_FIRSTEVENT, SDL_LASTEVENT) == 1
          && next_event.type == SDL_TEXTINPUT)
+#endif
         {
             // If an SDL_TEXTINPUT event is found, we always assume it
             // matches the key press. The input text must be a single
@@ -362,6 +378,7 @@ static void UpdateMouseButtonState(unsigned int button, boolean on)
     D_PostEvent(&event);
 }
 
+#ifndef ATARI
 static void MapMouseWheelToButtons(SDL_MouseWheelEvent *wheel)
 {
     // SDL2 distinguishes button events from mouse wheel events.
@@ -393,6 +410,7 @@ static void MapMouseWheelToButtons(SDL_MouseWheelEvent *wheel)
     up.data2 = up.data3 = 0;
     D_PostEvent(&up);
 }
+#endif
 
 void I_HandleMouseEvent(SDL_Event *sdlevent)
 {
@@ -406,9 +424,16 @@ void I_HandleMouseEvent(SDL_Event *sdlevent)
             UpdateMouseButtonState(sdlevent->button.button, false);
             break;
 
+#ifdef ATARI
+        case SDL_MOUSEMOTION:
+            mouse_dx += sdlevent->motion.xrel;
+            mouse_dy += sdlevent->motion.yrel;
+            break;
+#else
         case SDL_MOUSEWHEEL:
             MapMouseWheelToButtons(&(sdlevent->wheel));
             break;
+#endif
 
         default:
             break;
@@ -440,7 +465,13 @@ void I_ReadMouse(void)
     int x, y;
     event_t ev;
 
+#ifdef ATARI
+    x = mouse_dx;
+    y = mouse_dy;
+    mouse_dx = mouse_dy = 0;
+#else
     SDL_GetRelativeMouseState(&x, &y);
+#endif
 
     if (x != 0 || y != 0) 
     {

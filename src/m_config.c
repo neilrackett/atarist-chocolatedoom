@@ -2617,7 +2617,7 @@ float M_GetFloatVariable(const char *name)
 
 static char *GetDefaultConfigDir(void)
 {
-#if !defined(_WIN32) || defined(_WIN32_WCE)
+#if (!defined(_WIN32) || defined(_WIN32_WCE)) && !defined(ATARI)
 
     // Configuration settings are stored in an OS-appropriate path
     // determined by SDL.  On typical Unix systems, this might be
@@ -2681,6 +2681,11 @@ void M_SetMusicPackDir(void)
 {
     const char *current_path;
     char *prefdir, *music_pack_path, *readme_path;
+
+#ifdef ATARI
+    // No music packs: there is no SDL_mixer to play them
+    return;
+#endif
 
     current_path = M_GetStringVariable("music_pack_path");
 
@@ -2786,6 +2791,16 @@ char *M_GetSaveGameDir(const char *iwadname)
 char *M_GetAutoloadDir(const char *iwadname)
 {
     char *result;
+
+#ifdef ATARI
+    // Beside the program, like the config and the savegames, and only
+    // looked in, not made: TOS has no hidden folders to put it in.
+    if (autoload_path == NULL || strlen(autoload_path) == 0)
+    {
+        autoload_path = M_StringJoin(exedir, "autoload", NULL);
+    }
+    return M_StringJoin(autoload_path, DIR_SEPARATOR_S, iwadname, NULL);
+#endif
 
     if (autoload_path == NULL || strlen(autoload_path) == 0)
     {

@@ -682,6 +682,9 @@ void R_InitColormaps (void)
     //  256 byte align tables.
     lump = W_GetNumForName(DEH_String("COLORMAP"));
     colormaps = W_CacheLumpNum(lump, PU_STATIC);
+#ifdef R_DRAW_M68K
+    R_InitColormapsW(lump);
+#endif
 }
 
 

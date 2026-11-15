@@ -38,6 +38,12 @@
 
 void D_DoomMain (void);
 
+#ifdef ATARI
+// The program's entry is i_atari_start.c's main, which checks the CPU
+#define main I_ChocolateMain
+int main(int argc, char **argv);
+#endif
+
 int main(int argc, char **argv)
 {
     // save arguments

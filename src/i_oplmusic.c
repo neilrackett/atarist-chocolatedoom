@@ -1485,6 +1485,13 @@ static void I_OPL_PlaySong(void *handle, boolean looping)
 
     file = handle;
 
+#ifdef ATARI
+    // The callbacks run from the VBL (opl_atari.c), which must not see
+    // the song half set up: a track's first event with its channels not
+    // yet initialised, say.
+    OPL_Lock();
+#endif
+
     // Allocate track data.
 
     tracks = malloc(MIDI_NumTracks(file) * sizeof(opl_track_data_t));
@@ -1517,6 +1524,10 @@ static void I_OPL_PlaySong(void *handle, boolean looping)
     // behavior of the DMX library, and some of the higher-level code in
     // s_sound.c relies on this.
     OPL_SetPaused(0);
+
+#ifdef ATARI
+    OPL_Unlock();
+#endif
 }
 
 static void I_OPL_PauseSong(void)
@@ -1653,6 +1664,40 @@ static void *I_OPL_RegisterSong(void *data, int len)
     }
 
     OPL_Lock();
+
+#ifdef ATARI
+    // The song is converted and read in memory: TOS has no temporary
+    // folder, and a disk is slow to write.
+    if (IsMid(data, len) && len < MAXMIDLENGTH)
+    {
+        result = MIDI_LoadMemory(data, len);
+    }
+    else
+    {
+        MEMFILE *instream = mem_fopen_read(data, len);
+        MEMFILE *outstream = mem_fopen_write();
+        void *outbuf;
+        size_t outbuf_len;
+
+        result = NULL;
+        if (mus2mid(instream, outstream) == 0)
+        {
+            mem_get_buf(outstream, &outbuf, &outbuf_len);
+            result = MIDI_LoadMemory(outbuf, outbuf_len);
+        }
+        mem_fclose(instream);
+        mem_fclose(outstream);
+    }
+
+    if (result == NULL)
+    {
+        fprintf(stderr, "I_OPL_RegisterSong: Failed to load MID.\n");
+    }
+
+    OPL_Unlock();
+
+    return result;
+#endif
 
     // MUS files begin with "MUS"
     // Reject anything which doesnt have this signature

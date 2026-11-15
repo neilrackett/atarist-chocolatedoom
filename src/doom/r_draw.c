@@ -99,6 +99,7 @@ int			dccount;
 // Thus a special case loop for very fast rendering can
 //  be used. It has also been used with Wolfenstein 3D.
 // 
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawColumn (void) 
 { 
     int			count; 
@@ -143,6 +144,7 @@ void R_DrawColumn (void)
 	
     } while (count--); 
 } 
+#endif // R_DRAW_M68K
 
 
 
@@ -205,6 +207,7 @@ void R_DrawColumn (void)
 #endif
 
 
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawColumnLow (void) 
 { 
     int			count; 
@@ -249,6 +252,7 @@ void R_DrawColumnLow (void)
 
     } while (count--);
 }
+#endif // R_DRAW_M68K
 
 
 //
@@ -280,6 +284,7 @@ int	fuzzpos = 0;
 //  could create the SHADOW effect,
 //  i.e. spectres and invisible players.
 //
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawFuzzColumn (void) 
 { 
     int			count; 
@@ -328,9 +333,11 @@ void R_DrawFuzzColumn (void)
 	dest += SCREENWIDTH;
     } while (count--); 
 } 
+#endif // R_DRAW_M68K
 
 // low detail mode version
  
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawFuzzColumnLow (void) 
 { 
     int			count; 
@@ -388,6 +395,7 @@ void R_DrawFuzzColumnLow (void)
 	dest2 += SCREENWIDTH;
     } while (count--); 
 } 
+#endif // R_DRAW_M68K
  
   
   
@@ -571,6 +579,7 @@ int			dscount;
 
 //
 // Draws the actual span.
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawSpan (void) 
 { 
     unsigned int position, step;
@@ -621,6 +630,7 @@ void R_DrawSpan (void)
 
     } while (count--);
 }
+#endif // R_DRAW_M68K
 
 
 
@@ -700,6 +710,7 @@ void R_DrawSpan (void)
 //
 // Again..
 //
+#ifndef R_DRAW_M68K // the 68020 drawers: src/atari/r_draw_m68k.c
 void R_DrawSpanLow (void)
 {
     unsigned int position, step;
@@ -749,6 +760,7 @@ void R_DrawSpanLow (void)
 
     } while (count--);
 }
+#endif // R_DRAW_M68K
 
 //
 // R_InitBuffer 
@@ -913,6 +925,10 @@ R_VideoErase
     if (background_buffer != NULL)
     {
         memcpy(I_VideoBuffer + ofs, background_buffer + ofs, count * sizeof(*I_VideoBuffer));
+#ifdef ATARI
+        // The HUD message's erase in the border marks nothing itself
+        I_MarkRect(ofs % SCREENWIDTH, ofs / SCREENWIDTH, count, 1);
+#endif
     }
 } 
 
