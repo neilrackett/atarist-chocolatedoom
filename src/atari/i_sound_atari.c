@@ -70,10 +70,6 @@ static unsigned int start_count;
 static int idle_updates;
 static boolean sound_initialized = false;
 
-// The voices open with the first effect, not at start-up: on a TT the
-// monitor-detect bit reads inverted while DMA sound plays, and the
-// screen, opened after the sound, would then take the colour monitor
-// for a mono one.
 static boolean voices_open = false;
 static boolean use_sfx_prefix;
 
@@ -320,16 +316,6 @@ static int I_Atari_StartSound(sfxinfo_t *sfxinfo, int channel, int vol,
         return -1;
     }
 
-    if (!voices_open)
-    {
-        if (STDL_OpenVoices(VOICE_RATE) < 0)
-        {
-            sound_initialized = false;
-            return -1;
-        }
-        voices_open = true;
-    }
-
     // The channel's last effect stops: Doom has picked this channel
     v = VoiceForChannel(channel);
     if (v >= 0)
@@ -483,6 +469,13 @@ static boolean I_Atari_InitSound(GameMission_t mission)
             return false;
         }
     }
+
+    if (STDL_OpenVoices(VOICE_RATE) < 0)
+    {
+        printf("I_Atari_InitSound: the voices would not open\n");
+        return false;
+    }
+    voices_open = true;
 
     sound_initialized = true;
     return true;

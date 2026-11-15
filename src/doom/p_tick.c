@@ -108,6 +108,30 @@ void P_RunThinkers (void)
 	}
 	else
 	{
+#ifdef ATARI
+	    // A thing that isn't moving and whose state lasts: all that
+	    // P_MobjThinker does for it is count the state's tics down,
+	    // which is done here, without the call (after TTDOOM). The
+	    // tests are P_MobjThinker's, in its order.
+	    if (currentthinker->function.acp1 == (actionf_p1) P_MobjThinker)
+	    {
+		mobj_t *mobj = (mobj_t *) currentthinker;
+
+		if (!mobj->momx && !mobj->momy
+		 && !(mobj->flags & MF_SKULLFLY)
+		 && mobj->z == mobj->floorz && !mobj->momz
+		 && mobj->tics != -1)
+		{
+		    if (!--mobj->tics)
+			P_SetMobjState (mobj, mobj->state->nextstate);
+		}
+		else
+		{
+		    P_MobjThinker (mobj);
+		}
+	    }
+	    else
+#endif
 	    if (currentthinker->function.acp1)
 		currentthinker->function.acp1 (currentthinker);
             nextthinker = currentthinker->next;

@@ -82,6 +82,22 @@ fixed_t			baseyscale;
 
 fixed_t			cachedheight[SCREENHEIGHT];
 fixed_t			cacheddistance[SCREENHEIGHT];
+
+#ifdef R_DRAW_M68K
+// A view row's distance and texture steps for the plane height they were
+// last worked out for (id's cachedheight[] and so on, a row together in
+// one line of the data cache)
+typedef struct
+{
+    fixed_t	height;
+    fixed_t	distance;
+    fixed_t	xstep;
+    fixed_t	ystep;
+} planerow_t;
+
+static planerow_t	planerows[SCREENHEIGHT];
+
+#endif
 fixed_t			cachedxstep[SCREENHEIGHT];
 fixed_t			cachedystep[SCREENHEIGHT];
 
@@ -191,7 +207,12 @@ void R_ClearPlanes (void)
     lastopening = openings;
     
     // texture calculation
+#ifdef R_DRAW_M68K
+    for (i=0 ; i<SCREENHEIGHT ; i++)
+	planerows[i].height = 0;
+#else
     memset (cachedheight, 0, sizeof(cachedheight));
+#endif
 
     // left to right mapping
     angle = (viewangle-ANG90)>>ANGLETOFINESHIFT;
@@ -320,6 +341,157 @@ R_CheckPlane
 }
 
 
+
+#ifdef R_DRAW_M68K
+// (After TTDOOM.) R_MakeSpans only notes each span (R_StageSpan), and
+// R_MapStagedSpans works a visplane's out and sets them up as span
+// records, drawn together (R_FlushSpans): R_MapPlane's sums, R_MakeSpans'
+// loop and the drawer in turn missed the 68030's instruction cache a
+// third of the time. The same spans, in the same order, as R_MapPlane.
+#define MAXPLANESPANS	256
+static spanrec_t	planespans[MAXPLANESPANS];
+static spanrec_t*	planespan = planespans;
+
+static void R_FlushSpans (void)
+{
+    if (detailshift)
+	R_DrawSpansLow (planespans, planespan, ds_source);
+    else
+	R_DrawSpans (planespans, planespan, ds_source);
+    planespan = planespans;
+}
+
+#define MAXSTAGEDSPANS	512
+typedef struct
+{
+    short	y;
+    short	x1;
+    short	x2;
+} stagedspan_t;
+static stagedspan_t	stagedspans[MAXSTAGEDSPANS];
+static stagedspan_t*	stagedspan = stagedspans;
+
+static void R_MapStagedSpans (void);
+
+// (R_MapPlane's range check is R_MapStagedSpans': here, inline four
+// times in R_DrawPlanes' loop, it pushed the loop out of the cache.)
+static inline void R_StageSpan (int y, int x1, int x2)
+{
+    stagedspan->y = y;
+    stagedspan->x1 = x1;
+    stagedspan->x2 = x2;
+    if (++stagedspan == stagedspans + MAXSTAGEDSPANS)
+	R_MapStagedSpans ();
+}
+
+// FixedMul as the 64-bit multiply, or (a 68060) the call, chosen once
+#define SPAN_MUL(a, b) (muls64 ? FixedMul64 ((a), (b)) : FixedMulSoft ((a), (b)))
+
+static inline __attribute__((always_inline)) void
+R_MapStagedSpansAt (const int low, const int muls64)
+{
+    const stagedspan_t*	t;
+    const stagedspan_t* const end = stagedspan;
+    spanrec_t*		r = planespan;
+    const fixed_t	height = planeheight;
+    const fixed_t	xscale = basexscale;
+    const fixed_t	yscale = baseyscale;
+    const fixed_t	vx = viewx;
+    const fixed_t	vy = -viewy;
+    const angle_t	va = viewangle;
+    lighttable_t* const	fixedmap = fixedcolormap;
+    lighttable_t** const zlight = planezlight;
+
+    // The rows these spans are on, at this plane's height: a loop of its
+    // own, so that the spans' loop is small enough for the cache
+    for (t = stagedspans; t < end; t++)
+    {
+	const int	y = t->y;
+	planerow_t* const row = &planerows[y];
+
+#ifdef RANGECHECK
+	if (t->x2 < t->x1
+	 || t->x1 < 0
+	 || t->x2 >= viewwidth
+	 || y > viewheight)
+	{
+	    I_Error ("R_MapPlane: %i, %i at %i",t->x1,t->x2,y);
+	}
+#endif
+
+	if (height != row->height)
+	{
+	    fixed_t	distance;
+
+	    row->height = height;
+	    distance = row->distance = SPAN_MUL (height, yslope[y]);
+	    row->xstep = SPAN_MUL (distance, xscale);
+	    row->ystep = SPAN_MUL (distance, yscale);
+	}
+    }
+
+    for (t = stagedspans; t < end; t++)
+    {
+	const int	y = t->y;
+	const int	x1 = t->x1;
+	const planerow_t* const row = &planerows[y];
+	const fixed_t	distance = row->distance;
+	angle_t		angle;
+	fixed_t		length;
+	fixed_t		xfrac;
+	fixed_t		yfrac;
+	unsigned	index;
+	lighttable_t*	colormap;
+
+	length = SPAN_MUL (distance, distscale[x1]);
+	angle = (va + xtoviewangle[x1])>>ANGLETOFINESHIFT;
+	xfrac = vx + SPAN_MUL (finecosine[angle], length);
+	yfrac = vy - SPAN_MUL (finesine[angle], length);
+
+	index = distance >> LIGHTZSHIFT;
+
+	if (index >= MAXLIGHTZ )
+	    index = MAXLIGHTZ-1;
+
+	colormap = zlight[index];
+	if (__builtin_expect (fixedmap != NULL, 0))
+	    colormap = fixedmap;
+
+	R_SetupSpan (r, y, x1, t->x2, colormap, xfrac, yfrac,
+		     row->xstep, row->ystep, low);
+	if (++r == planespans + MAXPLANESPANS)
+	{
+	    planespan = r;
+	    R_FlushSpans ();
+	    r = planespans;
+	}
+    }
+    planespan = r;
+    stagedspan = stagedspans;
+    R_FlushSpans ();
+}
+
+static __attribute__((noinline)) void R_MapStagedSpans (void)
+{
+    if (fixedmul_muls64)
+    {
+	if (detailshift)
+	    R_MapStagedSpansAt (1, 1);
+	else
+	    R_MapStagedSpansAt (0, 1);
+    }
+    else
+    {
+	if (detailshift)
+	    R_MapStagedSpansAt (1, 0);
+	else
+	    R_MapStagedSpansAt (0, 0);
+    }
+}
+
+#define R_MapPlane R_StageSpan
+#endif
+
 //
 // R_MakeSpans
 //
@@ -353,6 +525,42 @@ R_MakeSpans
 	b2--;
     }
 }
+
+#ifdef R_DRAW_M68K
+// R_MakeSpans inline, in R_DrawPlanes' loop, which calls it for every
+// column of every visplane
+static inline __attribute__((always_inline)) void
+MakeSpans
+( int		x,
+  int		t1,
+  int		b1,
+  int		t2,
+  int		b2 )
+{
+    while (t1 < t2 && t1<=b1)
+    {
+	R_MapPlane (t1,spanstart[t1],x-1);
+	t1++;
+    }
+    while (b1 > b2 && b1>=t1)
+    {
+	R_MapPlane (b1,spanstart[b1],x-1);
+	b1--;
+    }
+	
+    while (t2 < t1 && t2<=b2)
+    {
+	spanstart[t2] = x;
+	t2++;
+    }
+    while (b2 > b1 && b2>=t2)
+    {
+	spanstart[b2] = x;
+	b2--;
+    }
+}
+#endif
+
 
 
 
@@ -438,11 +646,24 @@ void R_DrawPlanes (void)
 
 	for (x=pl->minx ; x<= stop ; x++)
 	{
+#ifdef R_DRAW_M68K
+	    MakeSpans(x,pl->top[x-1],
+			pl->bottom[x-1],
+			pl->top[x],
+			pl->bottom[x]);
+	    continue;
+#endif
 	    R_MakeSpans(x,pl->top[x-1],
 			pl->bottom[x-1],
 			pl->top[x],
 			pl->bottom[x]);
 	}
+
+#ifdef R_DRAW_M68K
+	// The plane's spans, drawn before its flat is let go
+	if (stagedspan != stagedspans)
+	    R_MapStagedSpans ();
+#endif
 	
         W_ReleaseLumpNum(lumpnum);
     }

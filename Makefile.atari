@@ -34,8 +34,8 @@ all tt st clean:
 
 else
 
-OBJROOT = build-atari
-DISTDIR = dist-atari
+OBJROOT ?= build-atari
+DISTDIR ?= dist-atari
 
 # The game: Chocolate Doom's own sources, less the SDL_mixer, SDL_net,
 # textscreen, PC-speaker and high-resolution modules, which have no path
@@ -67,12 +67,13 @@ SRCS = $(addprefix src/,$(COMMON) $(GAME) $(DEH)) \
        $(addprefix src/doom/,$(DOOM)) $(addprefix opl/,$(OPL)) \
        $(addprefix src/atari/,$(ATARI))
 
-INCLUDES = -Isrc/atari -Isrc/atari/compat -Isrc -Isrc/doom -Iopl \
+INCLUDES = -Isrc/atari -Isrc -Isrc/doom -Iopl \
            -I$(STDL)/addons/sdl2/include/SDL2 -I$(STDL)/include
 DEFINES  = -DATARI -D_GNU_SOURCE -DHAVE_CONFIG_H -DDISABLE_SDL2MIXER -DDISABLE_SDL2NET
 WARN     = -Wall -Wno-unused -Werror=implicit-function-declaration
+# XCFLAGS: more, for an experiment (with OBJROOT and DISTDIR of its own)
 CFLAGS   = -std=gnu99 -O2 -fomit-frame-pointer $(WARN) $(DEFINES) $(INCLUDES) \
-           -MMD -MP
+           -MMD -MP $(XCFLAGS)
 
 # TT and Falcon: 68020 code without the FPU (a Falcon may have none),
 # linked against the 68000 libraries, which assume no FPU either.
@@ -113,13 +114,42 @@ $(OBJROOT)/tt/src/atari/i_atari_start.o: src/atari/i_atari_start.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -m68000 -DATARI_NEEDS_68020 -c -o $@ $<
 
-$(DISTDIR)/CHOCTT.TOS: $(OBJS_TT) $(LIBS_TT)
+# A program TOS loaded 2 bytes off a long moves itself up 2 bytes
+# (src/atari/atari_align.c, after TTDOOM's): it starts at
+# atari_align_entry, not the C library's _start, and everything moves but
+# that code, which so has to be the first thing in the text, ahead of the
+# C library's crt0.o. The compiler's driver links its start files before
+# anything it is given, so a specs file puts the object at the head of
+# them. The link is checked: atari_align_front must be the text's first
+# symbol. The code reads the program's file again, by its name: CHOCTT or
+# CHOCST, .TOS or .TTP.
+NM = $(CROSS)nm
+ALIGN_ENTRY = -Wl,-e,atari_align_entry
+ALIGN_FRONT_CHECK = $(NM) -n -t d $(1) | awk \
+	'$$2 ~ /^[Tt]$$/ && !n++ { a = $$1 } \
+	 /atari_align_front$$/ { k = $$1 - a; f = 1 } \
+	 END { if (!f || k) { print "*** atari_align_front is " k " bytes into the text: it must be first"; exit 1 } }'
+
+.PRECIOUS: $(OBJROOT)/%/atari_align.o $(OBJROOT)/%/atari_align.specs
+$(OBJROOT)/%/atari_align.o: src/atari/atari_align.c
 	@mkdir -p $(dir $@)
-	$(CC) -m68000 -o $(OBJROOT)/CHOCTT.TOS $(OBJS_TT) $(LIBS_TT)
+	$(CC) $(CFLAGS) -m68000 '-DATARI_ALIGN_NAME="CHOC$(shell echo $* | tr a-z A-Z)"' -c -o $@ $<
+$(OBJROOT)/%/atari_align.specs: $(OBJROOT)/%/atari_align.o
+	printf '%%rename startfile align_startfile\n\n*startfile:\n%s %%(align_startfile)\n\n' '$<' > $@
+
+$(DISTDIR)/CHOCTT.TOS: $(OBJS_TT) $(LIBS_TT) $(OBJROOT)/tt/atari_align.o \
+		$(OBJROOT)/tt/atari_align.specs
+	@mkdir -p $(dir $@)
+	$(CC) -m68000 -specs=$(OBJROOT)/tt/atari_align.specs $(ALIGN_ENTRY) \
+	    -o $(OBJROOT)/CHOCTT.TOS $(OBJS_TT) $(LIBS_TT)
+	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/CHOCTT.TOS)
 	$(STRIP) -o $@ $(OBJROOT)/CHOCTT.TOS
-$(DISTDIR)/CHOCST.TOS: $(OBJS_ST) $(LIBS_ST)
+$(DISTDIR)/CHOCST.TOS: $(OBJS_ST) $(LIBS_ST) $(OBJROOT)/st/atari_align.o \
+		$(OBJROOT)/st/atari_align.specs
 	@mkdir -p $(dir $@)
-	$(CC) -m68000 -o $(OBJROOT)/CHOCST.TOS $(OBJS_ST) $(LIBS_ST)
+	$(CC) -m68000 -specs=$(OBJROOT)/st/atari_align.specs $(ALIGN_ENTRY) \
+	    -o $(OBJROOT)/CHOCST.TOS $(OBJS_ST) $(LIBS_ST)
+	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/CHOCST.TOS)
 	$(STRIP) -o $@ $(OBJROOT)/CHOCST.TOS
 
 clean:

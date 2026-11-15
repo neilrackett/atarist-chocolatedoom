@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <mint/osbind.h>
 
+#include "SDL.h"
+
 #include "doomtype.h"
 #include "i_endoom.h"
 #include "i_system.h"
@@ -33,6 +35,11 @@ void I_Endoom(byte *endoom_data)
     char line[ENDOOM_W + 3];
     int x, y, len;
     byte c;
+
+    // The desktop's screen and keyboard back first: STDL holds the IKBD
+    // until it quits, and TOS would never see the key waited for. D_Endoom
+    // is the last of the exit functions to run.
+    SDL_Quit();
 
     // ST Low's console has 40 columns; ST Medium, ST High and a TT's or
     // a Falcon's desktop modes have 80.

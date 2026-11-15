@@ -74,11 +74,6 @@ static pixel_t *video_buffer_mem;
 static short band_x0[NUM_BANDS], band_x1[NUM_BANDS];
 static boolean anything_marked;
 
-// Events read ahead (I_AtariPeekEvent)
-#define EVENT_QUEUE 32
-static SDL_Event event_queue[EVENT_QUEUE];
-static int event_count, event_next;
-
 // Configuration variables, all of i_video.c's, so a config file written
 // on another machine reads and writes back unchanged. Most have no
 // meaning here.
@@ -293,48 +288,27 @@ void I_StartFrame (void)
 {
 }
 
-// i_input.c's look at the next event, for the text a key press typed
-boolean I_AtariPeekEvent(SDL_Event *ev)
-{
-    if (event_next + 1 < event_count)
-    {
-        *ev = event_queue[event_next + 1];
-        return true;
-    }
-
-    return false;
-}
-
 void I_GetEvent(void)
 {
-    SDL_Event *sdlevent;
+    SDL_Event sdlevent;
 
-    // A frame's events are read first, so I_AtariPeekEvent can see the
-    // one after a key press.
-    event_count = 0;
-    while (event_count < EVENT_QUEUE
-        && SDL_PollEvent(&event_queue[event_count]))
+    while (SDL_PollEvent(&sdlevent))
     {
-        ++event_count;
-    }
-
-    for (event_next = 0; event_next < event_count; ++event_next)
-    {
-        sdlevent = &event_queue[event_next];
-
-        switch (sdlevent->type)
+        switch (sdlevent.type)
         {
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                I_HandleKeyboardEvent(sdlevent);
+                I_HandleKeyboardEvent(&sdlevent);
                 break;
 
+            // The mouse's motion is read as relative state, by
+            // I_ReadMouse, as on a PC
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
-            case SDL_MOUSEMOTION:
+            case SDL_MOUSEWHEEL:
                 if (usemouse && !nomouse)
                 {
-                    I_HandleMouseEvent(sdlevent);
+                    I_HandleMouseEvent(&sdlevent);
                 }
                 break;
 
@@ -350,8 +324,6 @@ void I_GetEvent(void)
                 break;
         }
     }
-
-    event_count = event_next = 0;
 }
 
 void I_StartTic (void)

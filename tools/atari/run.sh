@@ -15,7 +15,8 @@
 #                    (0x1c Return, 0x01 Esc, 0x39 space) or a character
 #   keydown VAL / keyup VAL
 #   fifo CMD...      a raw command for the fifo
-#   prof             profile from the demo's first tic to I_Error (a
+#   prof             (with PRGNAME=CHOCDOOM.TOS: see below)
+#                    profile from the demo's first tic to I_Error (a
 #                    timedemo's result), into NAME/profile.txt; give it
 #                    the program with its symbols (build-atari/CHOCTT.TOS),
 #                    once the program runs (after "waitfor ST_Init").
@@ -53,7 +54,11 @@ fi
 
 R=$REPO/tmp/atari/$NAME
 rm -rf "$R"; mkdir -p "$R/hd" "$R/shots"
-cp "$PROG" "$R/hd/CHOCDOOM.TOS"
+# Under its own name (CHOCTT.TOS, CHOCST.TOS), which it moves itself onto
+# a long by (atari_align.c); PRGNAME=X.TOS keeps it where TOS put it, as
+# Hatari's profiler needs (it can't take a moved program's symbols)
+PRGNAME=${PRGNAME:-$(basename "$PROG" | tr a-z A-Z)}
+cp "$PROG" "$R/hd/$PRGNAME"
 cp "$IWAD" "$R/hd/"
 [ -n "${CFG:-}" ] && cp "$CFG" "$R/hd/DEFAULT.CFG"
 [ -n "${EXTRACFG:-}" ] && cp "$EXTRACFG" "$R/hd/CHOCDOOM.CFG"
@@ -79,7 +84,7 @@ SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-dummy} SDL_AUDIODRIVER=dummy "$HATARI" \
   --confirm-quit false --fast-boot on --sound 44100 --statusbar off \
   --alert-level fatal --conout 2 --cmd-fifo "$FIFO" \
   --screenshot-dir "$R/shots" --screenshot-format png \
-  --harddrive "$R/hd" --auto "C:\\CHOCDOOM.TOS" > "$LOG" 2>&1 &
+  --harddrive "$R/hd" --auto "C:\\$PRGNAME" > "$LOG" 2>&1 &
 HPID=$!
 for i in $(seq 1 50); do [ -p "$FIFO" ] && break; sleep 0.2; done
 

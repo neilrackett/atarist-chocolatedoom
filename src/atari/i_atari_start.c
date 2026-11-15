@@ -113,5 +113,30 @@ int main(int argc, char **argv)
 
     M_InitFixed();
 
-    return I_ChocolateMain(argc, argv);
+    // MiNTLib puts the stack a multiple of 4 above the basepage, which
+    // GEMDOS places only on an even address: a stack 2 bytes off a long
+    // makes a 68030 read and write every long on it in two bus cycles
+    // (TTDOOM measured that half of a misaligned program's cost). On a
+    // long, then, with the game below it.
+    {
+        register int ret __asm__("d0");
+        register int a_argc __asm__("d1") = argc;
+        register char **a_argv __asm__("a0") = argv;
+
+        __asm__ __volatile__ (
+            "move.l	%%sp,%%a1		\n\t"
+            "move.l	%%sp,%%d2		\n\t"
+            "and.w	#-4,%%d2		\n\t"
+            "move.l	%%d2,%%sp		\n\t"
+            "move.l	%%a1,-(%%sp)		\n\t"   // the old stack
+            "move.l	%%a0,-(%%sp)		\n\t"
+            "move.l	%%d1,-(%%sp)		\n\t"
+            "jsr	_I_ChocolateMain	\n\t"
+            "addq.l	#8,%%sp			\n\t"
+            "move.l	(%%sp),%%sp		\n\t"
+            : "=r" (ret), "+r" (a_argc), "+r" (a_argv)
+            :
+            : "d2", "a1", "cc", "memory");
+        return ret;
+    }
 }

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <mint/osbind.h>
 #include <mint/cookie.h>
+#include <mint/basepage.h>
 
 #include "doomtype.h"
 #include "i_atari.h"
@@ -151,7 +152,17 @@ byte *I_AtariZoneBase(int *size, int mb)
         zone = (byte *) base;
     }
 
-    printf("zone: %li KiB in %s-RAM\n", want / 1024, in_tt_ram ? "TT" : "ST");
+    {
+        long sp;
+
+        __asm__ ("move.l %%sp,%0" : "=d" (sp));
+        extern long atari_align_moved;   // atari_align.c: 0 or 2
+
+        printf("zone: %li KiB in %s-RAM; program at %p%s, stack at %lx\n",
+               want / 1024, in_tt_ram ? "TT" : "ST",
+               (void *) _base->p_tbase,
+               atari_align_moved ? ", moved up" : "", sp);
+    }
     *size = (int) want;
     return zone;
 }

@@ -521,6 +521,42 @@ P_LookForPlayers
 	if (player->health <= 0)
 	    continue;		// dead
 
+#ifdef ATARI
+	// The angle test before the sight check, which costs far more (id
+	// had them the other way round; after TTDOOM). Either one failing
+	// skips the player, and neither changes anything the other or the
+	// game reads: P_CheckSight only bumps validcount, which is compared
+	// for equality, and its own counters. So the same players are seen,
+	// and demos stay in sync. Not for Doom 1.2's sight check, whose
+	// P_PathTraverse emulates vanilla's intercepts overrun.
+	if (gameversion > exe_doom_1_2)
+	{
+	    if (!allaround)
+	    {
+		an = R_PointToAngle2 (actor->x,
+				      actor->y, 
+				      player->mo->x,
+				      player->mo->y)
+		    - actor->angle;
+
+		if (an > ANG90 && an < ANG270)
+		{
+		    dist = P_AproxDistance (player->mo->x - actor->x,
+					    player->mo->y - actor->y);
+		    // if real close, react anyway
+		    if (dist > MELEERANGE)
+			continue;	// behind back
+		}
+	    }
+
+	    if (!P_CheckSight (actor, player->mo))
+		continue;		// out of sight
+
+	    actor->target = player->mo;
+	    return true;
+	}
+#endif
+
 	if (!P_CheckSight (actor, player->mo))
 	    continue;		// out of sight
 			

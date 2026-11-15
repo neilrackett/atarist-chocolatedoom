@@ -2617,7 +2617,7 @@ float M_GetFloatVariable(const char *name)
 
 static char *GetDefaultConfigDir(void)
 {
-#if (!defined(_WIN32) || defined(_WIN32_WCE)) && !defined(ATARI)
+#if !defined(_WIN32) || defined(_WIN32_WCE)
 
     // Configuration settings are stored in an OS-appropriate path
     // determined by SDL.  On typical Unix systems, this might be

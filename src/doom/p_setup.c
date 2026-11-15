@@ -782,6 +782,9 @@ P_SetupLevel
     P_LoadSegs (lumpnum+ML_SEGS);
 
     P_GroupLines ();
+#ifdef ATARI
+    P_InitSightRecords ();
+#endif
     P_LoadReject (lumpnum+ML_REJECT);
 
     bodyqueslot = 0;

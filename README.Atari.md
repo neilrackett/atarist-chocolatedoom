@@ -53,6 +53,9 @@ from the desktop has none). `-file`, `-deh`, `-warp`, `-skill`,
   Xpad pad), which is on from the start as a game controller.
 - **The game is exact.** Demos stay in sync: every optimisation below was
   checked against a build of the same source for the PC (see "Testing").
+  So is the picture but for the floors and ceilings, which keep 16 bits
+  of texture fraction where vanilla keeps 10 (ADoom's span, as TTDOOM's):
+  a pixel in a hundred or so lands on the next texel.
 
 Not available: network games, the setup program, music packs, the PC
 speaker, and ENDOOM's colours (its text is printed on the desktop when an
@@ -65,20 +68,14 @@ ms a frame:
 
 | | size 9 (default) | size 10 |
 | --- | --- | --- |
-| high detail | 121 | 140 |
-| low detail | 86 | 99 |
+| high detail | 92 | 107 |
+| low detail | 69 | 79 |
 
-In real play the game logic runs too, every tic: 9-11 ms a tic here
-(`-nodraw`), so at full speed about a third of Hatari's TT's time. At a
-real TT's pace (`-playdemo demo3 -benchtics 600 -benchpace 190`) the game
-runs at about 90% of its speed, at 1.1 frames a second in low detail and
-0.9 in high: the game logic, still id's C, is most of each tic's time
-there, where TTDOOM's was cut to two thirds.
-
-A real TT takes about twice Hatari's time over a game like this
-(TTDOOM's measurements); a Falcon about twice a TT's. `CHOCST.TOS`
-takes about twice `CHOCTT.TOS`'s time on a TT (68000 code, and none of
-the assembler drawers), and an 8 MHz STE about 3 seconds a frame.
+In real play the game logic runs too, every tic: 5.8-6.9 ms a tic here
+(whole demos 1 and 3, `-nodraw`; 9.1-10.8 before the work below). At a real TT's pace
+(`-playdemo demo3 -benchtics 600 -benchpace 190`) the game runs at full
+speed, at 2.8 frames a second in low detail and 2.0 in high (1.1 and 0.9
+at 87-93% speed before). A Falcon (VGA) takes about twice a TT's time.
 
 Where it comes from, against the port as first built (high detail,
 size 9: 201 ms):
@@ -88,9 +85,27 @@ size 9: 201 ms):
   STDOOM's 16-bit versions on a 68000: 17%.
 - The column, span and fuzz drawers in assembler on a 68020
   (`src/atari/r_draw_m68k.c`), after TTDOOM's: the column four
-  instructions a pixel, the span vanilla's packed position exactly; low
-  detail stores pixel pairs from word colormaps: 22%.
+  instructions a pixel, the span 7.5 (ADoom's crossed registers); low
+  detail stores pixel pairs from word colormaps.
+- Walls, flats and sprites batched as TTDOOM's are, each loop small
+  enough for the 68030's 256-byte instruction cache: the seg loop in
+  passes (clip and mark, then texture column, light and scale, then the
+  columns set up as records and drawn together, a cached column fetched
+  without W_CacheLumpNum); a visplane's spans noted, then set up from a
+  cache of the rows a line of the data cache each, then drawn; a
+  sprite's posts as column records; R_MakeSpans inline.
+- The program moved onto a long when TOS loads it 2 bytes off, and its
+  stack put on one (`atari_align.c`, TTDOOM's): 2-3% under Hatari, about
+  2.5 times that on a real TT.
 - The screen: only marked boxes converted, and 1:1 by default.
+- The game logic, after TTDOOM's, every change checked against the PC
+  build's state over whole demos: the angle test before the sight check
+  in `P_LookForPlayers`; the sight check's BSP walk as a loop, on compact
+  records of the nodes and lines made at each level's load, and on a
+  68020 as one assembler routine laid out for the instruction cache
+  (16-bit, so only on a map under 32767 units across); thinkers that
+  only count their state's tics down handled in `P_RunThinkers`'s loop;
+  `R_PointOnSide` inline in `R_PointInSubsector`: 30% off a tic.
 
 ## Building
 
@@ -117,8 +132,8 @@ sources:
 | `i_sound_atari.c` | effects on STDL's voices |
 | `opl_atari.c` | an OPL driver that plays on the YM2149 |
 | `r_draw_m68k.c` | the 68020 drawers |
+| `atari_align.c` | the program moved onto a long, linked ahead of the C library's start |
 | `i_endoom_atari.c`, `net_atari.c` | ENDOOM as text; no network |
-| `compat/` | the few SDL2 calls the add-on lacks (`SDL_endian.h`, joystick GUIDs) |
 
 ## Testing
 
@@ -126,7 +141,8 @@ sources:
 own, with the IWAD, and plays a script against Hatari's command fifo
 (screenshots, keys, profiling); `MACHINE=tt` (2 MB + 4 MB TT-RAM),
 `tt4`, `falcon`, `ste` or `st`. `tools/atari/profagg.py` sums a profile
-per function.
+per function; give the profiled program another name (`PRGNAME=X.TOS`) so
+it doesn't move, as Hatari can't take a moved program's symbols.
 
 Two options, for the Atari build and for a PC build made with
 `-DCHOC_BENCH` (`cmake -DCMAKE_C_FLAGS=-DCHOC_BENCH`), check that nothing
@@ -142,6 +158,11 @@ ARGS="-timedemo demo1 -benchtics 600 -framehash" \
 
 With DOOM1.WAD 1.9 and the default settings, 600 tics: demo1 state
 `5d883da0` frames `3edfdd5a`, demo2 `a32fc838` / `414f485a`, demo3
-`7f557ea2` / `4d508737` (an Atari build draws one pixel of one frame of
-demo3 differently, where Doom reads past a column's end into memory that
-differs from machine to machine). The whole of demo1: state `565a4537`.
+`7f557ea2` / `4d508737`. The whole demos: demo1 `565a4537`, demo2
+`d32c8c31`, demo3 `249c2864`. The frames' hashes of a TT build differ
+from the PC's since the span loop (above); compare them between Atari
+builds, with demo3 apart, where one pixel depends on memory layout (Doom
+reads past a column's end). `-playdemo demoN -benchtics N` ends real play
+at tic N with frames a second and the game's speed, and `-benchpace 190`
+runs the game's clock 1.9 times as fast, as a real TT plays under
+Hatari's faster one.
