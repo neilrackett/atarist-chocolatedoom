@@ -437,6 +437,12 @@ void I_FinishUpdate (void)
         I_MarkRect(0, SCREENHEIGHT - 1, 80, 1);
     }
 
+#ifdef ATARI_FULL_FRAMES
+    // Heretic, Hexen and Strife draw into the screen without marking what
+    // they drew, as Doom's renderer does here: all of it, every frame
+    I_MarkRect(0, 0, SCREENWIDTH, SCREENHEIGHT);
+#endif
+
     // Draw disk icon before blit, if necessary.
     V_DrawDiskIcon();
 

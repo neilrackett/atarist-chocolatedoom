@@ -1,7 +1,7 @@
 #!/bin/bash
 # tools/atari/run.sh NAME PROG.TOS "cmd;cmd;..."
 #
-# Runs PROG (dist-atari/CHOCTT.TOS or CHOCST.TOS) under Hatari, headless,
+# Runs PROG (dist-atari/CHOC_TT.TOS or CHOC_ST.TOS) under Hatari, headless,
 # from a hard disk folder of its own with the IWAD beside it, then plays
 # a ;-separated script against Hatari's command fifo. Output goes to
 # tmp/atari/NAME/: log (the console), shots/ (screenshots) and hd/ (the
@@ -18,9 +18,9 @@
 #   prof             (with PRGNAME=CHOCDOOM.TOS: see below)
 #                    profile from the demo's first tic to I_Error (a
 #                    timedemo's result), into NAME/profile.txt; give it
-#                    the program with its symbols (build-atari/CHOCTT.TOS),
+#                    the program with its symbols (build-atari/CHOC_TT.TOS),
 #                    once the program runs (after "waitfor ST_Init").
-#                    profagg.py NAME/profile.txt build-atari/CHOCTT.TOS
+#                    profagg.py NAME/profile.txt build-atari/CHOC_TT.TOS
 #                    sums it per function.
 #
 # Environment:
@@ -54,7 +54,7 @@ fi
 
 R=$REPO/tmp/atari/$NAME
 rm -rf "$R"; mkdir -p "$R/hd" "$R/shots"
-# Under its own name (CHOCTT.TOS, CHOCST.TOS), which it moves itself onto
+# Under its own name (CHOC_TT.TOS, CHOC_ST.TOS), which it moves itself onto
 # a long by (atari_align.c); PRGNAME=X.TOS keeps it where TOS put it, as
 # Hatari's profiler needs (it can't take a moved program's symbols)
 PRGNAME=${PRGNAME:-$(basename "$PROG" | tr a-z A-Z)}

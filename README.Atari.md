@@ -2,17 +2,17 @@
 
 Chocolate Doom 3.1.1 on Atari machines, through the SDL2 add-on of
 [STDL](https://github.com/neilrackett/atarist-stdl) (the submodule in
-`extern/stdl`). Only Doom is ported; Heretic, Hexen, Strife and the setup
-program are not built.
+`extern/stdl`). Doom is the port proper; Heretic, Hexen and Strife build
+and run too (below), more slowly. The setup program is not built.
 
 | Program | For | Code |
 | --- | --- | --- |
-| `CHOCTT.TOS` | a TT or a Falcon (any 68020 to 68060) | 68030 |
-| `CHOCST.TOS` | every Atari: an ST, an STE, a TT, a Falcon | 68000 |
+| `CHOC_TT.TOS` | a TT or a Falcon (any 68020 to 68060) | 68030 |
+| `CHOC_ST.TOS` | every Atari: an ST, an STE, a TT, a Falcon | 68000 |
 
-`CHOCTT.TOS` is the one to play: a TT with 2 MB of ST-RAM and 4 MB of
-TT-RAM is the target. `CHOCST.TOS` shows on a TT or a Falcon what
-`CHOCTT.TOS` does, more slowly. On an ST it has STDL's 16-colour screen,
+`CHOC_TT.TOS` is the one to play: a TT with 2 MB of ST-RAM and 4 MB of
+TT-RAM is the target. `CHOC_ST.TOS` shows on a TT or a Falcon what
+`CHOC_TT.TOS` does, more slowly. On an ST it has STDL's 16-colour screen,
 which is for trying it out, not for playing: a frame takes seconds.
 
 ## Running it
@@ -122,13 +122,41 @@ size 9: 201 ms):
 - Low detail's view converted as pixel pairs (STDL's
   `STDL_SDL2_RenderCopyPairs`): 3.5 ms a frame.
 
+## Heretic, Hexen and Strife
+
+`make -f Makefile.atari GAME=heretic` (or `hexen`, `strife`) builds
+`HTIC_TT.TOS` and `HTIC_ST.TOS` (`HEXN_`, `STRF_`), the same two
+programs for that game, which take its IWAD (`HERETIC.WAD` or
+`HERETIC1.WAD`, `HEXEN.WAD`, `STRIFE1.WAD`) beside them. Their start-up
+screens (Heretic's and Strife's DOS text screens, Hexen's 640x480 one)
+print as lines, as Doom's does, and Hexen's CD music is not there.
+
+They have none of Doom's work above: their own renderers in C, and
+their whole screen converted every frame, as Raven took most of the
+marks of what changed out of theirs (`ATARI_FULL_FRAMES`). Strife's
+title sequence wants a zone of more than a 4 MB TT-RAM machine's 2.6 MB
+(its levels play in that); with 8 MB, on a 14 MB Falcon, it runs.
+
 ## Building
 
 ```
 git submodule update --init --recursive extern/stdl
-make -f Makefile.atari          # dist-atari/CHOCTT.TOS and CHOCST.TOS
+make -f Makefile.atari          # dist-atari/CHOC_TT.TOS and CHOC_ST.TOS
 make -f Makefile.atari tt       # or one of them
+make -f Makefile.atari GAME=heretic   # HTIC_TT.TOS and HTIC_ST.TOS
 ```
+
+`TOOLCHAIN=mintelf` builds with gcc 13 instead (`build-atari/mintelf`,
+`dist-atari/mintelf`), `LTO=1` adds link-time optimisation, and
+`tools/atari/pgo.sh` records a profile under Hatari (demos 1 and 2, low
+and high detail) and builds `dist-atari/mintelf-lto-pgo/CHOC_TT.TOS`
+with it. Under Hatari (demo1, low detail, size 9) gcc 13 was 0.7%
+slower than gcc 4.6.4, with LTO the same, and with LTO and PGO 0.2%
+faster (1% on demo3, which it didn't train on; 2-3% off a tic of the
+game logic): the hot paths are assembler. gcc 4.6.4 stays the default.
+STDL's assembler names C symbols as a.out does, so this build compiles
+STDL with `-fleading-underscore` and takes one underscore off every
+symbol in its archives.
 
 Run on the host, `Makefile.atari` runs itself in
 [atarist-toolkit-docker](https://github.com/sidecartridge/atarist-toolkit-docker)
@@ -149,6 +177,9 @@ sources:
 | `r_draw_m68k.c` | the 68020 drawers |
 | `atari_align.c` | the program moved onto a long, linked ahead of the C library's start |
 | `i_endoom_atari.c`, `net_atari.c` | ENDOOM as text; no network |
+| `txt_atari.c`, `i_videohr_atari.c` | Heretic's, Strife's and Hexen's start-up screens, which fail so they print lines |
+| `asmsym.h` | a C name as the assembler sees it, for gcc 4.6.4 and gcc 13 |
+| `pgo.c` | the profile's writer, in a `PGO=gen` build |
 
 ## Testing
 
@@ -168,7 +199,7 @@ adds a hash of every frame drawn. A PC build's hashes are the reference:
 
 ```
 ARGS="-timedemo demo1 -benchtics 600 -framehash" \
-    tools/atari/run.sh d1 dist-atari/CHOCTT.TOS "waitfor realtics"
+    tools/atari/run.sh d1 dist-atari/CHOC_TT.TOS "waitfor realtics"
 ```
 
 With DOOM1.WAD 1.9 and the default settings but high detail

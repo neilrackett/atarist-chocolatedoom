@@ -35,6 +35,7 @@
 #include "r_local.h"
 #include "r_sky.h"
 #include "p_local.h"
+#include "asmsym.h"
 
 
 
@@ -870,8 +871,8 @@ int R_PointNodeWalk (fixed_t x, fixed_t y, int nodenum,
 __asm__ (
 "	.text\n"
 "	.even\n"
-"	.globl	_R_PointNodeWalk\n"
-"_R_PointNodeWalk:\n"
+"	.globl	" ASM_SYM(R_PointNodeWalk) "\n"
+ASM_SYM(R_PointNodeWalk) ":\n"
 "	movem.l	%d2-%d6,-(%sp)\n"
 "	move.l	24(%sp),%d3\n"			// x
 "	move.l	28(%sp),%d4\n"			// y

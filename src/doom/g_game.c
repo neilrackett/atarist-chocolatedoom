@@ -2447,6 +2447,12 @@ static unsigned int G_StateHash(void)
 }
 #endif
 
+#ifdef ATARI
+// A profiling build's writer (src/atari/pgo.c, PGO=gen in Makefile.atari):
+// null in every other build, so the code profiled is the code it is used on
+void (*pgo_dump_hook) (void);
+#endif
+
 boolean G_CheckDemoStatus (void) 
 { 
     int             endtime; 
@@ -2463,6 +2469,13 @@ boolean G_CheckDemoStatus (void)
         // Prevent recursive calls
         timingdemo = false;
         demoplayback = false;
+
+#ifdef ATARI
+        if (pgo_dump_hook)
+        {
+            pgo_dump_hook();
+        }
+#endif
 
 #if defined(ATARI) || defined(CHOC_BENCH)
 	I_Error ("timed %i gametics in %i realtics (%f fps) state %08x "

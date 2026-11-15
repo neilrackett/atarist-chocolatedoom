@@ -38,15 +38,17 @@
 //
 
 
+#include "asmsym.h"
+
 __asm__ (
 "	.text\n"
 "	.balign	4\n"
 "	.globl	atari_align_entry\n"
-"	.globl	_atari_align_front\n"
-"	.globl	_atari_align_end\n"
-"	.globl	_atari_align_moved\n"
-"_atari_align_front:\n"
-"_atari_align_moved:\n"	// how far the program moved: 0 or 2
+"	.globl	" ASM_SYM(atari_align_front) "\n"
+"	.globl	" ASM_SYM(atari_align_end) "\n"
+"	.globl	" ASM_SYM(atari_align_moved) "\n"
+ASM_SYM(atari_align_front) ":\n"
+ASM_SYM(atari_align_moved) ":\n"	// how far the program moved: 0 or 2
 "	.long	0\n"
 ".Lalign_cpuv:\n"			// the _CPU cookie
 "	.long	0\n"
@@ -112,13 +114,13 @@ __asm__ (
 ".Lalign_asis:\n"
 "	sub.l	%a0,%a0\n"			// as TOS started us
 ".Lalign_go:\n"				// (the one relocated address
-"	jmp	__start\n"		// here: moved, it is 2 on)
+"	jmp	" ASM_SYM(_start) "\n"		// here: moved, it is 2 on)
 
 // The addresses first: once to see that the table is whole, once to
 // change them
 ".Lalign_shift:\n"
 "	move.l	8(%a5),%a3\n"
-"	lea	_atari_align_end(%pc),%a2\n"
+"	lea	" ASM_SYM(atari_align_end) "(%pc),%a2\n"
 "	move.l	%a2,%d5\n"
 "	sub.l	%a3,%d5\n"
 "	move.l	0xc(%a5),%d4\n"
@@ -153,7 +155,7 @@ __asm__ (
 "	addq.l	#2,0xc(%a5)\n"			// the text's size (the gap),
 "	addq.l	#2,0x10(%a5)\n"			// the data
 "	addq.l	#2,0x18(%a5)\n"			// and the BSS
-"	lea	_atari_align_moved(%pc),%a0\n"
+"	lea	" ASM_SYM(atari_align_moved) "(%pc),%a0\n"
 "	moveq	#2,%d0\n"
 "	move.l	%d0,(%a0)\n"
 "	jbra	.Lalign_asis\n"
@@ -296,6 +298,6 @@ __asm__ (
 "	moveq	#1,%d0\n"
 "	rts\n"
 "	.balign	4\n"
-"_atari_align_end:\n"
+ASM_SYM(atari_align_end) ":\n"
 );
 

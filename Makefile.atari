@@ -3,23 +3,38 @@
 # Chocolate Doom for the Atari ST, TT and Falcon, on STDL's SDL2 add-on
 #
 #   make -f Makefile.atari          both programs, in dist-atari/
-#   make -f Makefile.atari tt       dist-atari/CHOCTT.TOS: TT and Falcon,
+#   make -f Makefile.atari tt       dist-atari/CHOC_TT.TOS: TT and Falcon,
 #                                   68030 code (any 68020 to 68060)
-#   make -f Makefile.atari st       dist-atari/CHOCST.TOS: 68000 code, every
+#   make -f Makefile.atari st       dist-atari/CHOC_ST.TOS: 68000 code, every
 #                                   machine: an ST, an STE, a TT, a Falcon
 #   make -f Makefile.atari clean    removes build-atari/ and those programs
+#   make -f Makefile.atari GAME=heretic    Heretic (HTIC_TT.TOS, HTIC_ST.TOS),
+#                                   and GAME=hexen (HEXN_TT, HEXN_ST) and
+#                                   GAME=strife (STRF_TT, STRF_ST); GAME=doom,
+#                                   the default, is CHOC_TT and CHOC_ST
+#   make -f Makefile.atari TOOLCHAIN=mintelf [LTO=1] [PGO=gen|use]
+#                                   the same with gcc 13 (m68k-atari-mintelf),
+#                                   with link-time optimisation and
+#                                   profile-guided optimisation if asked
+#                                   (tools/atari/pgo.sh does both PGO
+#                                   steps), into build-atari/mintelf[-lto]
+#                                   [-pgo] and dist-atari/the same
 #
 # Run on the host, this Makefile runs itself in atarist-toolkit-docker
 # through stcmd (gcc 4.6.4, m68k-atari-mint), from the repository's root.
 # STDL is the submodule in extern/stdl, built here with the same compiler.
-# build-atari/CHOCTT.TOS and CHOCST.TOS are the programs with their
-# symbols, for Hatari's debugger and profiler (tools/atari/prof.sh).
+# build-atari/CHOC_TT.TOS and CHOC_ST.TOS (and the other games') are the
+# programs with their symbols, for Hatari's debugger and profiler.
 #
 ################################################################
 
-CROSS   = m68k-atari-mint-
+TOOLCHAIN ?= mint
+GAME    ?= doom
+CROSS   = m68k-atari-$(TOOLCHAIN)-
 CC      = $(CROSS)gcc
 STRIP   = $(CROSS)strip
+OBJCOPY = $(CROSS)objcopy
+NM      = $(CROSS)nm
 STDL    = extern/stdl
 
 .DEFAULT_GOAL := all
@@ -34,14 +49,59 @@ all tt st clean:
 
 else
 
-OBJROOT ?= build-atari
+# Each game's programs and its objects' folder (Doom's the original's)
+PROG_doom    = CHOC
+PROG_heretic = HTIC
+PROG_hexen   = HEXN
+PROG_strife  = STRF
+PROG    = $(PROG_$(GAME))
+GAMEDIR = $(if $(filter doom,$(GAME)),,/$(GAME))
+ifeq ($(PROG),)
+$(error GAME is doom, heretic, hexen or strife)
+endif
+
+ifeq ($(TOOLCHAIN),mint)
+OBJROOT ?= build-atari$(GAMEDIR)
 DISTDIR ?= dist-atari
+STDLLIB  = $(STDL)
+LDLIBS   =
+OPTFLAGS =
+LINK_TT  = -m68000
+else
+# gcc 13: folders of its own, fdlibm for the maths (the a.out libraries
+# can't link into ELF), and STDL's archives built here with it (below).
+# Its 68020 libraries assume no FPU with -msoft-float, so the TT program
+# links with its own CPU options, as TTDOOM's does.
+VARIANT  = $(TOOLCHAIN)$(if $(filter 1,$(LTO)),-lto)$(if $(PGO),-pgo)
+OBJROOT ?= build-atari/$(VARIANT)$(GAMEDIR)
+DISTDIR ?= dist-atari/$(VARIANT)
+STDLLIB  = $(OBJROOT)/stdl
+LDLIBS   = -lm
+OPTFLAGS = $(if $(filter 1,$(LTO)),-flto=auto)
+LINK_TT  = -m68020-60 -msoft-float
+# PGO=gen: a TT program that writes its profile to PGO.DAT when a
+# timedemo ends (src/atari/pgo.c). No value profiling, whose counters are
+# thread-local, which a TOS program can't link; profile correction, as the
+# VBL's counters run on while the profile is written. PGO=use: the
+# profile, merged into .gcda files beside the objects; a function changed
+# since it was recorded is compiled without it.
+ifeq ($(PGO),gen)
+OPTFLAGS += -fprofile-generate -fno-profile-values \
+            -fprofile-info-section=gcov_info
+PGO_OBJS  = src/atari/pgo.c
+endif
+ifeq ($(PGO),use)
+OPTFLAGS += -fprofile-use -fno-profile-values -fprofile-correction \
+            -fprofile-partial-training -Wno-missing-profile \
+            -Wno-coverage-mismatch
+endif
+endif
 
 # The game: Chocolate Doom's own sources, less the SDL_mixer, SDL_net,
 # textscreen, PC-speaker and high-resolution modules, which have no path
 # on the add-on; the Atari layer in src/atari replaces those.
 COMMON = i_main.c i_system.c m_argv.c m_misc.c
-GAME = aes_prng.c d_event.c d_iwad.c d_loop.c d_mode.c deh_str.c \
+SHARED = aes_prng.c d_event.c d_iwad.c d_loop.c d_mode.c deh_str.c \
        i_glob.c i_input.c i_joystick.c i_oplmusic.c i_sound.c i_timer.c \
        midifallback.c midifile.c mus2mid.c m_bbox.c m_cheat.c m_config.c \
        m_controls.c m_fixed.c net_client.c net_common.c \
@@ -59,17 +119,59 @@ DOOM = am_map.c deh_ammo.c deh_bexstr.c deh_cheat.c deh_doom.c deh_frame.c \
        p_sight.c p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c \
        r_data.c r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_things.c \
        s_sound.c sounds.c statdump.c st_lib.c st_stuff.c wi_stuff.c
+HERETIC = am_map.c ct_chat.c d_main.c d_net.c deh_ammo.c deh_frame.c \
+       deh_htext.c deh_htic.c deh_sound.c deh_thing.c deh_weapon.c \
+       f_finale.c g_game.c in_lude.c info.c m_random.c mn_menu.c \
+       p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c \
+       p_map.c p_maputl.c p_mobj.c p_plats.c p_pspr.c p_saveg.c p_setup.c \
+       p_sight.c p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c \
+       r_data.c r_draw.c r_main.c r_plane.c r_segs.c r_things.c s_sound.c \
+       sb_bar.c sounds.c
+HEXEN = a_action.c am_map.c ct_chat.c d_net.c f_finale.c g_game.c \
+       h2_main.c in_lude.c info.c m_random.c mn_menu.c p_acs.c p_anim.c \
+       p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c \
+       p_map.c p_maputl.c p_mobj.c p_plats.c p_pspr.c p_setup.c p_sight.c \
+       p_spec.c p_switch.c p_telept.c p_things.c p_tick.c p_user.c \
+       po_man.c r_bsp.c r_data.c r_draw.c r_main.c r_plane.c r_segs.c \
+       r_things.c s_sound.c sb_bar.c sc_man.c sn_sonix.c sounds.c \
+       st_start.c sv_save.c
+STRIFE = am_map.c d_items.c d_main.c d_net.c deh_ammo.c deh_cheat.c \
+       deh_frame.c deh_misc.c deh_ptr.c deh_sound.c deh_strife.c \
+       deh_thing.c deh_weapon.c doomdef.c doomstat.c dstrings.c \
+       f_finale.c f_wipe.c g_game.c hu_lib.c hu_stuff.c info.c m_menu.c \
+       m_random.c m_saves.c p_ceilng.c p_dialog.c p_doors.c p_enemy.c \
+       p_floor.c p_inter.c p_lights.c p_map.c p_maputl.c p_mobj.c \
+       p_plats.c p_pspr.c p_saveg.c p_setup.c p_sight.c p_spec.c \
+       p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c r_data.c r_draw.c \
+       r_main.c r_plane.c r_segs.c r_sky.c r_things.c s_sound.c sounds.c \
+       st_lib.c st_stuff.c wi_stuff.c
 OPL = opl.c opl_queue.c
 ATARI = i_atari_start.c i_atari.c i_video_atari.c i_sound_atari.c \
-        i_endoom_atari.c net_atari.c opl_atari.c r_draw_m68k.c
+        i_endoom_atari.c net_atari.c opl_atari.c
 
-SRCS = $(addprefix src/,$(COMMON) $(GAME) $(DEH)) \
-       $(addprefix src/doom/,$(DOOM)) $(addprefix opl/,$(OPL)) \
-       $(addprefix src/atari/,$(ATARI))
+# Each game's own sources and the Atari layer's for it: Doom's 68020
+# drawers, which know its renderer's records; Heretic's and Strife's
+# start-up screens' text calls, which fail, so they print their start-up
+# as Doom does; Hexen's 640x480 start-up screen, which fails the same way,
+# and its CD music, of which SDL2 has none. Hexen has no DeHackEd. The others' renderers mark only what Doom's did, if
+# that, so their whole screen is converted every frame (ATARI_FULL_FRAMES).
+GAME_SRCS_doom    = $(addprefix src/,$(DEH)) $(addprefix src/doom/,$(DOOM)) \
+                    src/atari/r_draw_m68k.c
+GAME_SRCS_heretic = $(addprefix src/,$(DEH)) \
+                    $(addprefix src/heretic/,$(HERETIC)) src/atari/txt_atari.c
+GAME_SRCS_hexen   = $(addprefix src/hexen/,$(HEXEN)) src/i_cdmus.c \
+                    src/atari/i_videohr_atari.c
+GAME_SRCS_strife  = $(addprefix src/,$(DEH)) \
+                    $(addprefix src/strife/,$(STRIFE)) src/atari/txt_atari.c
+GAME_DEFS = $(if $(filter doom,$(GAME)),,-DATARI_FULL_FRAMES)
 
-INCLUDES = -Isrc/atari -Isrc -Isrc/doom -Iopl \
+SRCS = $(addprefix src/,$(COMMON) $(SHARED)) $(GAME_SRCS_$(GAME)) \
+       $(addprefix opl/,$(OPL)) $(addprefix src/atari/,$(ATARI))
+
+INCLUDES = -Isrc/atari -Isrc -Isrc/$(GAME) -Iopl -Itextscreen \
            -I$(STDL)/addons/sdl2/include/SDL2 -I$(STDL)/include
-DEFINES  = -DATARI -D_GNU_SOURCE -DHAVE_CONFIG_H -DDISABLE_SDL2MIXER -DDISABLE_SDL2NET
+DEFINES  = -DATARI -D_GNU_SOURCE -DHAVE_CONFIG_H -DDISABLE_SDL2MIXER \
+           -DDISABLE_SDL2NET $(GAME_DEFS) '-DATARI_PROG="$(PROG)"'
 WARN     = -Wall -Wno-unused -Werror=implicit-function-declaration
 # XCFLAGS: more, for an experiment (with OBJROOT and DISTDIR of its own)
 CFLAGS   = -std=gnu99 -O2 -fomit-frame-pointer $(WARN) $(DEFINES) $(INCLUDES) \
@@ -78,12 +180,12 @@ CFLAGS   = -std=gnu99 -O2 -fomit-frame-pointer $(WARN) $(DEFINES) $(INCLUDES) \
 # TT and Falcon: 68020 code without the FPU (a Falcon may have none),
 # linked against the 68000 libraries, which assume no FPU either.
 CFLAGS_TT = $(CFLAGS) -m68020-60 -msoft-float
-LIBS_TT   = $(STDL)/libstdl-sdl2.a $(STDL)/libstdl.a
+LIBS_TT   = $(STDLLIB)/libstdl-sdl2.a $(STDLLIB)/libstdl.a
 # Every machine: 68000 code and the add-on's experimental build for it
 CFLAGS_ST = $(CFLAGS) -m68000
-LIBS_ST   = $(STDL)/libstdl-sdl2-st.a $(STDL)/libstdl.a
+LIBS_ST   = $(STDLLIB)/libstdl-sdl2-st.a $(STDLLIB)/libstdl.a
 
-OBJS_TT = $(SRCS:%.c=$(OBJROOT)/tt/%.o)
+OBJS_TT = $(SRCS:%.c=$(OBJROOT)/tt/%.o) $(PGO_OBJS:%.c=$(OBJROOT)/tt/%.o)
 OBJS_ST = $(SRCS:%.c=$(OBJROOT)/st/%.o)
 
 STDL_SRCS = $(wildcard $(STDL)/src/*.c $(STDL)/src/*.s $(STDL)/src/*.S \
@@ -92,21 +194,38 @@ STDL_SRCS = $(wildcard $(STDL)/src/*.c $(STDL)/src/*.s $(STDL)/src/*.S \
                        $(STDL)/lib/xpad/src/*.c)
 
 all: tt st
-tt: $(DISTDIR)/CHOCTT.TOS
-st: $(DISTDIR)/CHOCST.TOS
+tt: $(DISTDIR)/$(PROG)_TT.TOS
+st: $(DISTDIR)/$(PROG)_ST.TOS
 
+ifeq ($(TOOLCHAIN),mint)
 $(STDL)/libstdl-sdl2.a: $(STDL_SRCS)
 	$(MAKE) -C $(STDL) libstdl-sdl2.a libstdl.a
 $(STDL)/libstdl-sdl2-st.a: $(STDL_SRCS)
 	$(MAKE) -C $(STDL) libstdl-sdl2-st.a libstdl.a
 $(STDL)/libstdl.a: $(STDL)/libstdl-sdl2.a
+else
+# STDL with gcc 13, for this build alone. Its assembler names C symbols
+# with a.out's leading underscore, so it is compiled with
+# -fleading-underscore, which gives its C names one too, and every
+# symbol in the archives then loses one: an ELF library like any other.
+STDLRAW  = $(CURDIR)/$(STDLLIB)/raw
+STDLMAKE = $(MAKE) -C $(STDL) CROSS=$(CROSS) 'CC=$(CC) -fleading-underscore' \
+           OBJDIR=$(STDLRAW)/obj LIB=$(STDLRAW)/libstdl.a \
+           SDL2LIB=$(STDLRAW)/libstdl-sdl2.a SDL2STLIB=$(STDLRAW)/libstdl-sdl2-st.a
+$(STDLLIB)/%.a: $(STDL_SRCS)
+	@mkdir -p $(STDLRAW)
+	$(STDLMAKE) $(STDLRAW)/$*.a
+	$(NM) $(STDLRAW)/$*.a | awk '$$NF ~ /^_/ { print $$NF, substr($$NF, 2) }' \
+	    | sort -u > $(STDLLIB)/$*.syms
+	$(OBJCOPY) --redefine-syms=$(STDLLIB)/$*.syms $(STDLRAW)/$*.a $@
+endif
 
 $(OBJROOT)/tt/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS_TT) -c -o $@ $<
+	$(CC) $(CFLAGS_TT) $(OPTFLAGS) -c -o $@ $<
 $(OBJROOT)/st/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS_ST) -c -o $@ $<
+	$(CC) $(CFLAGS_ST) $(OPTFLAGS) -c -o $@ $<
 
 # The entry, 68000 code in both: the TT and Falcon build checks the CPU
 # there before any of its 68020 code runs.
@@ -121,39 +240,40 @@ $(OBJROOT)/tt/src/atari/i_atari_start.o: src/atari/i_atari_start.c
 # C library's crt0.o. The compiler's driver links its start files before
 # anything it is given, so a specs file puts the object at the head of
 # them. The link is checked: atari_align_front must be the text's first
-# symbol. The code reads the program's file again, by its name: CHOCTT or
-# CHOCST, .TOS or .TTP.
-NM = $(CROSS)nm
+# symbol. The code reads the program's file again, by its name: CHOC_TT or
+# CHOC_ST, .TOS or .TTP. Its object is named *crt0.o, whose text gcc 13's
+# linker script puts first.
 ALIGN_ENTRY = -Wl,-e,atari_align_entry
 ALIGN_FRONT_CHECK = $(NM) -n -t d $(1) | awk \
 	'$$2 ~ /^[Tt]$$/ && !n++ { a = $$1 } \
 	 /atari_align_front$$/ { k = $$1 - a; f = 1 } \
 	 END { if (!f || k) { print "*** atari_align_front is " k " bytes into the text: it must be first"; exit 1 } }'
 
-.PRECIOUS: $(OBJROOT)/%/atari_align.o $(OBJROOT)/%/atari_align.specs
-$(OBJROOT)/%/atari_align.o: src/atari/atari_align.c
+.PRECIOUS: $(OBJROOT)/%/atari_align-crt0.o $(OBJROOT)/%/atari_align.specs
+# (and Makefile.atari, which names the program)
+$(OBJROOT)/%/atari_align-crt0.o: src/atari/atari_align.c Makefile.atari
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -m68000 '-DATARI_ALIGN_NAME="CHOC$(shell echo $* | tr a-z A-Z)"' -c -o $@ $<
-$(OBJROOT)/%/atari_align.specs: $(OBJROOT)/%/atari_align.o
+	$(CC) $(CFLAGS) -m68000 '-DATARI_ALIGN_NAME="$(PROG)_$(shell echo $* | tr a-z A-Z)"' -c -o $@ $<
+$(OBJROOT)/%/atari_align.specs: $(OBJROOT)/%/atari_align-crt0.o
 	printf '%%rename startfile align_startfile\n\n*startfile:\n%s %%(align_startfile)\n\n' '$<' > $@
 
-$(DISTDIR)/CHOCTT.TOS: $(OBJS_TT) $(LIBS_TT) $(OBJROOT)/tt/atari_align.o \
+$(DISTDIR)/$(PROG)_TT.TOS: $(OBJS_TT) $(LIBS_TT) $(OBJROOT)/tt/atari_align-crt0.o \
 		$(OBJROOT)/tt/atari_align.specs
 	@mkdir -p $(dir $@)
-	$(CC) -m68000 -specs=$(OBJROOT)/tt/atari_align.specs $(ALIGN_ENTRY) \
-	    -o $(OBJROOT)/CHOCTT.TOS $(OBJS_TT) $(LIBS_TT)
-	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/CHOCTT.TOS)
-	$(STRIP) -o $@ $(OBJROOT)/CHOCTT.TOS
-$(DISTDIR)/CHOCST.TOS: $(OBJS_ST) $(LIBS_ST) $(OBJROOT)/st/atari_align.o \
+	$(CC) $(LINK_TT) $(OPTFLAGS) -specs=$(OBJROOT)/tt/atari_align.specs \
+	    $(ALIGN_ENTRY) -o $(OBJROOT)/$(PROG)_TT.TOS $(OBJS_TT) $(LIBS_TT) $(LDLIBS)
+	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/$(PROG)_TT.TOS)
+	$(STRIP) -o $@ $(OBJROOT)/$(PROG)_TT.TOS
+$(DISTDIR)/$(PROG)_ST.TOS: $(OBJS_ST) $(LIBS_ST) $(OBJROOT)/st/atari_align-crt0.o \
 		$(OBJROOT)/st/atari_align.specs
 	@mkdir -p $(dir $@)
-	$(CC) -m68000 -specs=$(OBJROOT)/st/atari_align.specs $(ALIGN_ENTRY) \
-	    -o $(OBJROOT)/CHOCST.TOS $(OBJS_ST) $(LIBS_ST)
-	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/CHOCST.TOS)
-	$(STRIP) -o $@ $(OBJROOT)/CHOCST.TOS
+	$(CC) -m68000 $(OPTFLAGS) -specs=$(OBJROOT)/st/atari_align.specs \
+	    $(ALIGN_ENTRY) -o $(OBJROOT)/$(PROG)_ST.TOS $(OBJS_ST) $(LIBS_ST) $(LDLIBS)
+	@$(call ALIGN_FRONT_CHECK,$(OBJROOT)/$(PROG)_ST.TOS)
+	$(STRIP) -o $@ $(OBJROOT)/$(PROG)_ST.TOS
 
 clean:
-	rm -rf $(OBJROOT) $(DISTDIR)/CHOCTT.TOS $(DISTDIR)/CHOCST.TOS
+	rm -rf $(OBJROOT) $(DISTDIR)/$(PROG)_TT.TOS $(DISTDIR)/$(PROG)_ST.TOS
 
 -include $(OBJS_TT:.o=.d) $(OBJS_ST:.o=.d)
 

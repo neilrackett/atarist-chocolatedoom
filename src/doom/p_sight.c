@@ -26,6 +26,7 @@
 
 // State.
 #include "r_state.h"
+#include "asmsym.h"
 
 //
 // P_CheckSight
@@ -758,8 +759,8 @@ P_SightCrossedLineAt (const sightseg_t* ss)
 __asm__ (
 "	.text\n"
 "	.even\n"
-"	.globl	_P_SightTrace\n"
-"_P_SightTrace:\n"
+"	.globl	" ASM_SYM(P_SightTrace) "\n"
+ASM_SYM(P_SightTrace) ":\n"
 "	movem.l	%d2-%d7/%a2-%a6,-(%sp)\n"
 "	move.l	48(%sp),%d0\n"			// bspnum
 "	move.l	52(%sp),%a6\n"			// the trace
@@ -907,7 +908,7 @@ __asm__ (
 "	jbra	.Lsight_cross\n"
 ".Lsight_crossed:\n"
 "	move.l	%a3,-(%sp)\n"
-"	jsr	_P_SightCrossedLineAt\n"
+"	jsr	" ASM_SYM(P_SightCrossedLineAt) "\n"
 "	addq.l	#4,%sp\n"
 "	tst.l	%d0\n"
 "	jbne	.Lsight_next\n"

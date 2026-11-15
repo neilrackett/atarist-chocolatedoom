@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <mint/osbind.h>
 #include <mint/cookie.h>
+#include "asmsym.h"
 
 // i_main.c's main, renamed under ATARI
 int I_ChocolateMain(int argc, char **argv);
@@ -98,8 +99,9 @@ int main(int argc, char **argv)
 
     if (Getcookie(C__CPU, &cpu) != C_FOUND || cpu < 20)
     {
-        Cconws("\r\nCHOCTT.TOS is for a TT or a Falcon: it needs a 68020"
-               "\r\nor better. CHOCST.TOS runs on every Atari.\r\n"
+        Cconws("\r\n" ATARI_PROG "_TT.TOS is for a TT or a Falcon: it needs"
+               "\r\na 68020 or better. " ATARI_PROG "_ST.TOS runs on every"
+               " Atari.\r\n"
                "\r\nPress any key.\r\n");
         Cconin();
         return 1;
@@ -131,7 +133,7 @@ int main(int argc, char **argv)
             "move.l	%%a1,-(%%sp)		\n\t"   // the old stack
             "move.l	%%a0,-(%%sp)		\n\t"
             "move.l	%%d1,-(%%sp)		\n\t"
-            "jsr	_I_ChocolateMain	\n\t"
+            "jsr	" ASM_SYM(I_ChocolateMain) "	\n\t"
             "addq.l	#8,%%sp			\n\t"
             "move.l	(%%sp),%%sp		\n\t"
             : "=r" (ret), "+r" (a_argc), "+r" (a_argv)
