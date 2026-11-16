@@ -7,12 +7,12 @@ and run too (below), more slowly. The setup program is not built.
 
 | Program | For | Code |
 | --- | --- | --- |
-| `CHOC_TT.TOS` | a TT or a Falcon (any 68020 to 68060) | 68030 |
-| `CHOC_ST.TOS` | every Atari: an ST, an STE, a TT, a Falcon | 68000 |
+| `DOOM_TT.TOS` | a TT or a Falcon (any 68020 to 68060) | 68030 |
+| `DOOM_ST.TOS` | every Atari: an ST, an STE, a TT, a Falcon | 68000 |
 
-`CHOC_TT.TOS` is the one to play: a TT with 2 MB of ST-RAM and 4 MB of
-TT-RAM is the target. `CHOC_ST.TOS` shows on a TT or a Falcon what
-`CHOC_TT.TOS` does, more slowly. On an ST it has STDL's 16-colour screen,
+`DOOM_TT.TOS` is the one to play: a TT with 2 MB of ST-RAM and 4 MB of
+TT-RAM is the target. `DOOM_ST.TOS` shows on a TT or a Falcon what
+`DOOM_TT.TOS` does, more slowly. On an ST it has STDL's 16-colour screen,
 which is for trying it out, not for playing: a frame takes seconds.
 
 ## Running it
@@ -125,8 +125,9 @@ size 9: 201 ms):
 ## Heretic, Hexen and Strife
 
 `make -f Makefile.atari GAME=heretic` (or `hexen`, `strife`) builds
-`HTIC_TT.TOS` and `HTIC_ST.TOS` (`HEXN_`, `STRF_`), the same two
-programs for that game, which take its IWAD (`HERETIC.WAD` or
+`dist/HERETIC/HTIC_TT.TOS` and `HTIC_ST.TOS` (`dist/HEXEN/HEXN_`,
+`dist/STRIFE/STRF_`), the same two programs for that game, which take
+its IWAD (`HERETIC.WAD` or
 `HERETIC1.WAD`, `HEXEN.WAD`, `STRIFE1.WAD`) beside them. Their start-up
 screens (Heretic's and Strife's DOS text screens, Hexen's 640x480 one)
 print as lines, as Doom's does, and Hexen's CD music is not there.
@@ -141,15 +142,15 @@ title sequence wants a zone of more than a 4 MB TT-RAM machine's 2.6 MB
 
 ```
 git submodule update --init --recursive extern/stdl
-make -f Makefile.atari          # dist-atari/CHOC_TT.TOS and CHOC_ST.TOS
+make -f Makefile.atari          # dist/DOOM/DOOM_TT.TOS and DOOM_ST.TOS
 make -f Makefile.atari tt       # or one of them
-make -f Makefile.atari GAME=heretic   # HTIC_TT.TOS and HTIC_ST.TOS
+make -f Makefile.atari GAME=heretic   # dist/HERETIC/HTIC_TT.TOS and HTIC_ST.TOS
 ```
 
-`TOOLCHAIN=mintelf` builds with gcc 13 instead (`build-atari/mintelf`,
-`dist-atari/mintelf`), `LTO=1` adds link-time optimisation, and
+`TOOLCHAIN=mintelf` builds with gcc 13 instead (`build/DOOM/mintelf`,
+`dist/DOOM/mintelf`), `LTO=1` adds link-time optimisation, and
 `tools/atari/pgo.sh` records a profile under Hatari (demos 1 and 2, low
-and high detail) and builds `dist-atari/mintelf-lto-pgo/CHOC_TT.TOS`
+and high detail) and builds `dist/DOOM/mintelf-lto-pgo/DOOM_TT.TOS`
 with it. Under Hatari (demo1, low detail, size 9) gcc 13 was 0.7%
 slower than gcc 4.6.4, with LTO the same, and with LTO and PGO 0.2%
 faster (1% on demo3, which it didn't train on; 2-3% off a tic of the
@@ -161,7 +162,7 @@ symbol in its archives.
 Run on the host, `Makefile.atari` runs itself in
 [atarist-toolkit-docker](https://github.com/sidecartridge/atarist-toolkit-docker)
 through `stcmd` (gcc 4.6.4, which STDL is built and tested with), and
-builds STDL's archives there too. `build-atari/` keeps the programs with
+builds STDL's archives there too. `build/DOOM/` (`build/HERETIC/`...) keeps the programs with
 their symbols, for Hatari's debugger and profiler.
 
 The Atari code is in `src/atari/` and under `#ifdef ATARI` in the shared
@@ -206,7 +207,7 @@ adds a hash of every frame drawn. A PC build's hashes are the reference:
 
 ```
 ARGS="-timedemo demo1 -benchtics 600 -framehash" \
-    tools/atari/run.sh d1 dist-atari/CHOC_TT.TOS "waitfor realtics"
+    tools/atari/run.sh d1 dist/DOOM/DOOM_TT.TOS "waitfor realtics"
 ```
 
 With DOOM1.WAD 1.9 and the default settings but high detail

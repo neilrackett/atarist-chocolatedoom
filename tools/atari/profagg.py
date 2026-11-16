@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # profagg.py PROFILE PROGRAM [N]: sums a Hatari CPU profile (run.sh's prof
 # command, NAME/profile.txt) per function, with the symbols of PROGRAM
-# (the build-atari/ program, unstripped), and lists the top N by cycles:
+# (the build/GAME/ program, unstripped), and lists the top N by cycles:
 # their share, instructions, cycles an instruction, instruction cache
 # misses and data cache hits. (After ataritt-doom's tools/bench/profagg.py.)
 import sys, re, bisect, subprocess, os

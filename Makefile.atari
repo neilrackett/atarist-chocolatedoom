@@ -2,40 +2,45 @@
 #
 # Chocolate Doom for the Atari ST, TT and Falcon, on STDL's SDL2 add-on
 #
-#   make -f Makefile.atari          both programs, in dist-atari/
-#   make -f Makefile.atari tt       dist-atari/CHOC_TT.TOS: TT and Falcon,
+#   make -f Makefile.atari          both programs, in dist/DOOM/
+#   make -f Makefile.atari tt       dist/DOOM/DOOM_TT.TOS: TT and Falcon,
 #                                   68030 code (any 68020 to 68060)
-#   make -f Makefile.atari st       dist-atari/CHOC_ST.TOS: 68000 code, every
+#   make -f Makefile.atari st       dist/DOOM/DOOM_ST.TOS: 68000 code, every
 #                                   machine: an ST, an STE, a TT, a Falcon
-#   make -f Makefile.atari clean    removes build-atari/ and those programs
+#   make -f Makefile.atari clean    removes the game's build folder and programs
 #   make -f Makefile.atari GAME=heretic    Heretic (HTIC_TT.TOS, HTIC_ST.TOS),
 #                                   and GAME=hexen (HEXN_TT, HEXN_ST) and
 #                                   GAME=strife (STRF_TT, STRF_ST); GAME=doom,
-#                                   the default, is CHOC_TT and CHOC_ST
+#                                   the default, is DOOM_TT and DOOM_ST;
+#                                   each game's in dist/GAME/ (HERETIC...)
 #   make -f Makefile.atari TOOLCHAIN=mintelf [LTO=1] [PGO=gen|use]
 #                                   the same with gcc 13 (m68k-atari-mintelf),
 #                                   with link-time optimisation and
 #                                   profile-guided optimisation if asked
 #                                   (tools/atari/pgo.sh does both PGO
-#                                   steps), into build-atari/mintelf[-lto]
-#                                   [-pgo] and dist-atari/the same
+#                                   steps), into build/GAME/mintelf[-lto]
+#                                   [-pgo] and dist/GAME/the same
 #
 # Run on the host, this Makefile runs itself in atarist-toolkit-docker
 # through stcmd (gcc 4.6.4, m68k-atari-mint), from the repository's root.
 # STDL is the submodule in extern/stdl, built here with the same compiler.
-# build-atari/CHOC_TT.TOS and CHOC_ST.TOS (and the other games') are the
-# programs with their symbols, for Hatari's debugger and profiler.
+# A game's objects go in build/GAME/ (build/DOOM...), with its programs
+# with their symbols, for Hatari's debugger and profiler; the programs
+# themselves in dist/GAME/. A gcc 13 build has a folder of its own in
+# each (build/DOOM/mintelf-lto/, dist/DOOM/mintelf-lto/).
 #
 ################################################################
 
 TOOLCHAIN ?= mint
-GAME    ?= doom
-CROSS   = m68k-atari-$(TOOLCHAIN)-
-CC      = $(CROSS)gcc
-STRIP   = $(CROSS)strip
-OBJCOPY = $(CROSS)objcopy
-NM      = $(CROSS)nm
-STDL    = extern/stdl
+GAME      ?= doom
+BUILDROOT ?= build
+DISTROOT  ?= dist
+CROSS     = m68k-atari-$(TOOLCHAIN)-
+CC        = $(CROSS)gcc
+STRIP     = $(CROSS)strip
+OBJCOPY   = $(CROSS)objcopy
+NM        = $(CROSS)nm
+STDL      = extern/stdl
 
 .DEFAULT_GOAL := all
 .PHONY: all tt st clean
@@ -49,32 +54,38 @@ all tt st clean:
 
 else
 
-# Each game's programs and its objects' folder (Doom's the original's)
-PROG_doom    = CHOC
+# Each game's programs, and its folder in BUILDROOT and DISTROOT
+PROG_doom    = DOOM
 PROG_heretic = HTIC
 PROG_hexen   = HEXN
 PROG_strife  = STRF
 PROG    = $(PROG_$(GAME))
-GAMEDIR = $(if $(filter doom,$(GAME)),,/$(GAME))
+GAMEUP_doom    = DOOM
+GAMEUP_heretic = HERETIC
+GAMEUP_hexen   = HEXEN
+GAMEUP_strife  = STRIFE
+GAMEUP  = $(GAMEUP_$(GAME))
 ifeq ($(PROG),)
 $(error GAME is doom, heretic, hexen or strife)
 endif
 
+# gcc 4.6.4 (the default) builds straight into the game's folders; another
+# toolchain into a folder of its own in each
+VARIANT  = $(if $(filter mint,$(TOOLCHAIN)),,$(TOOLCHAIN)$(if $(filter 1,$(LTO)),-lto)$(if $(PGO),-pgo))
+GAMEDIR  = $(GAMEUP)$(if $(VARIANT),/$(VARIANT))
+OBJROOT ?= $(BUILDROOT)/$(GAMEDIR)
+DISTDIR ?= $(DISTROOT)/$(GAMEDIR)
+
 ifeq ($(TOOLCHAIN),mint)
-OBJROOT ?= build-atari$(GAMEDIR)
-DISTDIR ?= dist-atari
-STDLLIB  = $(STDL)
-LDLIBS   =
-OPTFLAGS =
-LINK_TT  = -m68000
+STDLLIB   = $(STDL)
+LDLIBS    =
+OPTFLAGS  =
+LINK_TT   = -m68000
 else
 # gcc 13: folders of its own, fdlibm for the maths (the a.out libraries
 # can't link into ELF), and STDL's archives built here with it (below).
 # Its 68020 libraries assume no FPU with -msoft-float, so the TT program
 # links with its own CPU options, as TTDOOM's does.
-VARIANT  = $(TOOLCHAIN)$(if $(filter 1,$(LTO)),-lto)$(if $(PGO),-pgo)
-OBJROOT ?= build-atari/$(VARIANT)$(GAMEDIR)
-DISTDIR ?= dist-atari/$(VARIANT)
 STDLLIB  = $(OBJROOT)/stdl
 LDLIBS   = -lm
 OPTFLAGS = $(if $(filter 1,$(LTO)),-flto=auto)
@@ -153,8 +164,9 @@ ATARI = i_atari_start.c i_atari.c i_video_atari.c i_sound_atari.c \
 # drawers, which know its renderer's records; Heretic's and Strife's
 # start-up screens' text calls, which fail, so they print their start-up
 # as Doom does; Hexen's 640x480 start-up screen, which fails the same way,
-# and its CD music, of which SDL2 has none. Hexen has no DeHackEd. The others' renderers mark only what Doom's did, if
-# that, so their whole screen is converted every frame (ATARI_FULL_FRAMES).
+# and its CD music, of which SDL2 has none. Hexen has no DeHackEd. The
+# others' renderers mark only what Doom's did, if that, so their whole
+# screen is converted every frame (ATARI_FULL_FRAMES).
 GAME_SRCS_doom    = $(addprefix src/,$(DEH)) $(addprefix src/doom/,$(DOOM)) \
                     src/atari/r_draw_m68k.c
 GAME_SRCS_heretic = $(addprefix src/,$(DEH)) \
@@ -240,8 +252,8 @@ $(OBJROOT)/tt/src/atari/i_atari_start.o: src/atari/i_atari_start.c
 # C library's crt0.o. The compiler's driver links its start files before
 # anything it is given, so a specs file puts the object at the head of
 # them. The link is checked: atari_align_front must be the text's first
-# symbol. The code reads the program's file again, by its name: CHOC_TT or
-# CHOC_ST, .TOS or .TTP. Its object is named *crt0.o, whose text gcc 13's
+# symbol. The code reads the program's file again, by its name: DOOM_TT or
+# DOOM_ST, .TOS or .TTP. Its object is named *crt0.o, whose text gcc 13's
 # linker script puts first.
 ALIGN_ENTRY = -Wl,-e,atari_align_entry
 ALIGN_FRONT_CHECK = $(NM) -n -t d $(1) | awk \
