@@ -94,19 +94,20 @@ void R_DrawColumnLow(void)
         return;
 
 #ifdef RANGECHECK
-    if ((unsigned) dc_x >= SCREENWIDTH || dc_yl < 0 || dc_yh >= SCREENHEIGHT)
-        I_Error("R_DrawColumn: %i to %i at %i", dc_yl, dc_yh, dc_x);
-//      dccount++;
+    if ((unsigned) dc_x >= SCREENWIDTH / 2 || dc_yl < 0
+        || dc_yh >= SCREENHEIGHT)
+        I_Error("R_DrawColumnLow: %i to %i at %i", dc_yl, dc_yh, dc_x);
 #endif
 
-    dest = ylookup[dc_yl] + columnofs[dc_x];
+    // Low detail: dc_x is a pair of pixels
+    dest = ylookup[dc_yl] + columnofs[dc_x << 1];
 
     fracstep = dc_iscale;
     frac = dc_texturemid + (dc_yl - centery) * fracstep;
 
     do
     {
-        *dest = dc_colormap[dc_source[(frac >> FRACBITS) & 127]];
+        dest[0] = dest[1] = dc_colormap[dc_source[(frac >> FRACBITS) & 127]];
         dest += SCREENWIDTH;
         frac += fracstep;
     }
@@ -311,23 +312,122 @@ void R_DrawSpanLow(void)
     int count, spot;
 
 #ifdef RANGECHECK
-    if (ds_x2 < ds_x1 || ds_x1 < 0 || ds_x2 >= SCREENWIDTH
+    if (ds_x2 < ds_x1 || ds_x1 < 0 || ds_x2 >= SCREENWIDTH / 2
         || (unsigned) ds_y > SCREENHEIGHT)
-        I_Error("R_DrawSpan: %i to %i at %i", ds_x1, ds_x2, ds_y);
-//      dscount++;
+        I_Error("R_DrawSpanLow: %i to %i at %i", ds_x1, ds_x2, ds_y);
 #endif
 
     xfrac = ds_xfrac;
     yfrac = ds_yfrac;
 
-    dest = ylookup[ds_y] + columnofs[ds_x1];
+    // Low detail: ds_x1 and ds_x2 are pairs of pixels
+    dest = ylookup[ds_y] + columnofs[ds_x1 << 1];
     count = ds_x2 - ds_x1;
     do
     {
         spot = ((yfrac >> (16 - 6)) & (63 * 64)) + ((xfrac >> 16) & 63);
-        *dest++ = ds_colormap[ds_source[spot]];
+        dest[0] = dest[1] = ds_colormap[ds_source[spot]];
+        dest += 2;
         xfrac += ds_xstep;
         yfrac += ds_ystep;
+    }
+    while (count--);
+}
+
+void R_DrawTLColumnLow(void)
+{
+    int count;
+    byte *dest;
+    fixed_t frac, fracstep;
+
+    if (!dc_yl)
+        dc_yl = 1;
+    if (dc_yh == viewheight - 1)
+        dc_yh = viewheight - 2;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+#ifdef RANGECHECK
+    if ((unsigned) dc_x >= SCREENWIDTH / 2 || dc_yl < 0
+        || dc_yh >= SCREENHEIGHT)
+        I_Error("R_DrawTLColumnLow: %i to %i at %i", dc_yl, dc_yh, dc_x);
+#endif
+
+    // Low detail: dc_x is a pair of pixels
+    dest = ylookup[dc_yl] + columnofs[dc_x << 1];
+
+    fracstep = dc_iscale;
+    frac = dc_texturemid + (dc_yl - centery) * fracstep;
+
+    do
+    {
+        dest[0] = dest[1] = tinttable[(dest[0] << 8) + dc_colormap[dc_source[(frac >> FRACBITS) & 127]]];
+        dest += SCREENWIDTH;
+        frac += fracstep;
+    }
+    while (count--);
+}
+
+void R_DrawTranslatedColumnLow(void)
+{
+    int count;
+    byte *dest;
+    fixed_t frac, fracstep;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+#ifdef RANGECHECK
+    if ((unsigned) dc_x >= SCREENWIDTH / 2 || dc_yl < 0
+        || dc_yh >= SCREENHEIGHT)
+        I_Error("R_DrawTranslatedColumnLow: %i to %i at %i", dc_yl, dc_yh, dc_x);
+#endif
+
+    // Low detail: dc_x is a pair of pixels
+    dest = ylookup[dc_yl] + columnofs[dc_x << 1];
+
+    fracstep = dc_iscale;
+    frac = dc_texturemid + (dc_yl - centery) * fracstep;
+
+    do
+    {
+        dest[0] = dest[1] = dc_colormap[dc_translation[dc_source[frac >> FRACBITS]]];
+        dest += SCREENWIDTH;
+        frac += fracstep;
+    }
+    while (count--);
+}
+
+void R_DrawTranslatedTLColumnLow(void)
+{
+    int count;
+    byte *dest;
+    fixed_t frac, fracstep;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+#ifdef RANGECHECK
+    if ((unsigned) dc_x >= SCREENWIDTH / 2 || dc_yl < 0
+        || dc_yh >= SCREENHEIGHT)
+        I_Error("R_DrawTranslatedTLColumnLow: %i to %i at %i", dc_yl, dc_yh, dc_x);
+#endif
+
+    // Low detail: dc_x is a pair of pixels
+    dest = ylookup[dc_yl] + columnofs[dc_x << 1];
+
+    fracstep = dc_iscale;
+    frac = dc_texturemid + (dc_yl - centery) * fracstep;
+
+    do
+    {
+        dest[0] = dest[1] = tinttable[(dest[0] << 8) + dc_colormap[dc_translation[dc_source[frac >> FRACBITS]]]];
+        dest += SCREENWIDTH;
+        frac += fracstep;
     }
     while (count--);
 }

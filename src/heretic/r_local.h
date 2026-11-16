@@ -300,6 +300,8 @@ extern int screenblocks;
 extern void (*colfunc) (void);
 extern void (*basecolfunc) (void);
 extern void (*tlcolfunc) (void);
+extern void (*transcolfunc) (void);
+extern void (*transtlcolfunc) (void);
 extern void (*spanfunc) (void);
 
 int R_PointOnSide(fixed_t x, fixed_t y, node_t * node);
@@ -464,6 +466,7 @@ void R_DrawTLColumnLow(void);
 void R_DrawTranslatedColumn(void);
 void R_DrawTranslatedTLColumn(void);
 void R_DrawTranslatedColumnLow(void);
+void R_DrawTranslatedTLColumnLow(void);
 
 extern int ds_y;
 extern int ds_x1;

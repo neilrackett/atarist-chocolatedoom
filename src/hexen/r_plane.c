@@ -432,17 +432,17 @@ void R_DrawPlanes(void)
                             + SKYTEXTUREMIDSHIFTED + (dc_yl - centery);
                         source2 = R_GetColumn(skyTexture2, angle + offset2)
                             + SKYTEXTUREMIDSHIFTED + (dc_yl - centery);
-                        dest = ylookup[dc_yl] + columnofs[x];
+                        dest = ylookup[dc_yl] + columnofs[x << detailshift];
                         do
                         {
                             if (*source)
                             {
-                                *dest = *source++;
+                                dest[detailshift] = *dest = *source++;
                                 source2++;
                             }
                             else
                             {
-                                *dest = *source2++;
+                                dest[detailshift] = *dest = *source2++;
                                 source++;
                             }
                             dest += SCREENWIDTH;
@@ -479,10 +479,10 @@ void R_DrawPlanes(void)
                             >> ANGLETOSKYSHIFT;
                         source = R_GetColumn(skyTexture, angle + offset)
                             + SKYTEXTUREMIDSHIFTED + (dc_yl - centery);
-                        dest = ylookup[dc_yl] + columnofs[x];
+                        dest = ylookup[dc_yl] + columnofs[x << detailshift];
                         do
                         {
-                            *dest = *source++;
+                            dest[detailshift] = *dest = *source++;
                             dest += SCREENWIDTH;
                         }
                         while (count--);

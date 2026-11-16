@@ -138,6 +138,19 @@ marks of what changed out of theirs (`ATARI_FULL_FRAMES`). Strife's
 title sequence wants a zone of more than a 4 MB TT-RAM machine's 2.6 MB
 (its levels play in that); with 8 MB, on a 14 MB Falcon, it runs.
 
+Heretic and Hexen play in low detail here, as Doom does
+(`detaillevel 0` in `HERETIC.CFG` or `HEXEN.CFG` for high). Raven left
+it unfinished and out of reach: their low-detail column and span
+drawers wrote one pixel where they needed two, the translucent and
+translated drawers had no low versions, and nothing set it. Here every
+drawer has one (the sprites pick theirs through pointers, as the walls
+do), and the sky, which both draw themselves, doubles its pixels too.
+Their views aren't converted as pairs (their whole screens are). On a
+TT (Hatari, timedemo demo1) Heretic went from 4.91 to 7.19 frames a
+second, Hexen from 3.86 to 5.55; in real play Heretic from 1.59 to
+2.45, the game at full speed in both. A Mega STE gains 7%, being bound
+by the game logic. Strife has no low detail: Rogue took it out.
+
 ## Building
 
 ```
@@ -192,7 +205,7 @@ STDL turns on). `-benchsecs N`, in any of the games, plays N seconds
 from the first frame and quits with frames a second and the game's speed:
 with `-playdemo demo1`, a game's real frame rate. On a 4 MB Mega STE
 (Hatari), Doom gave 0.32 frames a second with the game at 28% of its
-speed, Hexen 0.21 at 20% and Heretic 0.14 at 14%; Strife's zone is too
+speed, Hexen 0.22 at 22% and Heretic 0.15 at 15% (low detail); Strife's zone is too
 small there, as on a TT with 4 MB of TT-RAM. A 68000 takes longer than a
 tic over a tic's game logic, so no frame rate keeps the game at speed. `tools/atari/profagg.py` sums a profile
 per function; give the profiled program another name (`PRGNAME=X.TOS`) so

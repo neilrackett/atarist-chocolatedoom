@@ -426,13 +426,13 @@ void R_DrawPlanes(void)
                                 dc_x);
 #endif
 
-                    dest = ylookup[dc_yl] + columnofs[dc_x];
+                    dest = ylookup[dc_yl] + columnofs[dc_x << detailshift];
 
                     fracstep = 1;
                     frac = (dc_texturemid >> FRACBITS) + (dc_yl - centery);
                     do
                     {
-                        *dest = dc_source[frac];
+                        dest[detailshift] = *dest = dc_source[frac];
                         dest += SCREENWIDTH;
                         frac += fracstep;
                     }

@@ -352,6 +352,9 @@ extern int detailshift;         // 0 = high, 1 = low
 extern void (*colfunc) (void);
 extern void (*basecolfunc) (void);
 extern void (*tlcolfunc) (void);
+extern void (*transcolfunc) (void);
+extern void (*transtlcolfunc) (void);
+extern void (*alttlcolfunc) (void);
 extern void (*spanfunc) (void);
 
 int R_PointOnSide(fixed_t x, fixed_t y, node_t * node);
@@ -529,6 +532,8 @@ void R_DrawTLColumnLow(void);
 void R_DrawTranslatedColumn(void);
 void R_DrawTranslatedTLColumn(void);
 void R_DrawTranslatedColumnLow(void);
+void R_DrawTranslatedTLColumnLow(void);
+void R_DrawAltTLColumnLow(void);
 void R_DrawAltTLColumn(void);
 //void  R_DrawTranslatedAltTLColumn(void);
 

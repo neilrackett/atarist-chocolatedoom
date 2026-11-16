@@ -68,6 +68,8 @@ void (*colfunc) (void);
 void (*basecolfunc) (void);
 void (*tlcolfunc) (void);
 void (*transcolfunc) (void);
+void (*transtlcolfunc) (void);
+void (*alttlcolfunc) (void);
 void (*spanfunc) (void);
 
 /*
@@ -577,13 +579,17 @@ void R_ExecuteSetViewSize(void)
         colfunc = basecolfunc = R_DrawColumn;
         tlcolfunc = R_DrawTLColumn;
         transcolfunc = R_DrawTranslatedColumn;
+        transtlcolfunc = R_DrawTranslatedTLColumn;
+        alttlcolfunc = R_DrawAltTLColumn;
         spanfunc = R_DrawSpan;
     }
     else
     {
         colfunc = basecolfunc = R_DrawColumnLow;
-        tlcolfunc = R_DrawTLColumn;
-        transcolfunc = R_DrawTranslatedColumn;
+        tlcolfunc = R_DrawTLColumnLow;
+        transcolfunc = R_DrawTranslatedColumnLow;
+        transtlcolfunc = R_DrawTranslatedTLColumnLow;
+        alttlcolfunc = R_DrawAltTLColumnLow;
         spanfunc = R_DrawSpanLow;
     }
 
@@ -653,7 +659,11 @@ void R_ExecuteSetViewSize(void)
 ==============
 */
 
+#ifdef ATARI
+int detailLevel = 1;           // low detail by default
+#else
 int detailLevel;
+#endif
 int screenblocks = 10;
 
 void R_Init(void)

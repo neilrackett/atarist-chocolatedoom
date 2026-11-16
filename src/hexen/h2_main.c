@@ -174,6 +174,9 @@ void D_BindVariables(void)
     M_BindIntVariable("music_volume",           &snd_MusicVolume);
     M_BindIntVariable("messageson",             &messageson);
     M_BindIntVariable("screenblocks",           &screenblocks);
+#ifdef ATARI
+    M_BindIntVariable("detaillevel",            &detailLevel);
+#endif
     M_BindIntVariable("snd_channels",           &snd_Channels);
     M_BindIntVariable("vanilla_savegame_limit", &vanilla_savegame_limit);
     M_BindIntVariable("vanilla_demo_limit",     &vanilla_demo_limit);
