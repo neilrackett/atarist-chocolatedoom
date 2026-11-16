@@ -21,6 +21,7 @@
 #include "m_bbox.h"
 #include "r_local.h"
 #include "tables.h"
+#include "i_video.h"
 
 int viewangleoffset;
 
@@ -821,5 +822,11 @@ void R_RenderPlayerView(player_t * player)
     R_DrawPlanes();
     NetUpdate();                // check for new console commands
     R_DrawMasked();
+#ifdef ATARI
+    // The Atari screen: in low detail every drawer writes each pixel
+    // twice, so the view is converted as pixel pairs (i_video_atari.c)
+    I_MarkView(viewwindowx, viewwindowy, scaledviewwidth, viewheight,
+               detailshift != 0);
+#endif
     NetUpdate();                // check for new console commands
 }

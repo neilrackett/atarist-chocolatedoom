@@ -84,6 +84,20 @@ static boolean anything_marked;
 static int view_x0, view_x1, view_y0, view_y1;
 static boolean nopairs;
 
+// The texture the copies are made from: texture, or (Heretic, Hexen and
+// Strife) view_texture, over the same pixels, for the view's pairs
+static SDL_Texture *copy_texture;
+#ifdef ATARI_FULL_FRAMES
+static SDL_Texture *view_texture;
+extern int screenblocks;
+#endif
+
+// -paircheck: groups of the pairs view that were not in pairs and not
+// marked, so converted wrongly (testing)
+static boolean paircheck;
+static unsigned long paircheck_frames, paircheck_bad, paircheck_badframes;
+static int paircheck_first_frame = -1, paircheck_first_x, paircheck_first_y;
+
 // -benchsecs N: frames a second over N seconds of play, for any game
 static int bench_secs, bench_frames, bench_start = -1, bench_gametic;
 
@@ -234,11 +248,11 @@ static void CopyRows(int x0, int x1, int sy, int dy, int h, boolean pairs)
 
     if (pairs)
     {
-        STDL_SDL2_RenderCopyPairs(renderer, texture, &src, &dst);
+        STDL_SDL2_RenderCopyPairs(renderer, copy_texture, &src, &dst);
     }
     else
     {
-        SDL_RenderCopy(renderer, texture, &src, &dst);
+        SDL_RenderCopy(renderer, copy_texture, &src, &dst);
     }
 }
 
@@ -304,6 +318,102 @@ static void CopyMarked(void)
     }
 }
 
+#ifdef ATARI_FULL_FRAMES
+// Heretic, Hexen and Strife draw into the screen without marking most
+// of what they drew, so every frame copies all of it; with a view
+// narrower than the screen the add-on compares those copies with the
+// screen and converts only the groups that changed
+// (STDL_SDL2_HINT_COMPARE, I_InitGraphics). The view in pairs is copied
+// from another texture over the same pixels, in a batch of its own
+// (the add-on doesn't compare a batch with pairs in it), with the marks
+// over it (V_MarkRect: messages, the menu), which it converts whole.
+static void CopyFullFrame(void)
+{
+    int b, y0, y1, x0, x1;
+
+    copy_texture = texture;
+
+    if (view_x0 >= view_x1)
+    {
+        CopyBox(0, SCREENWIDTH, 0, SCREENHEIGHT, false);
+        return;
+    }
+
+    if (view_y0 > 0)
+    {
+        CopyBox(0, SCREENWIDTH, 0, view_y0, false);
+    }
+    if (view_x0 > 0)
+    {
+        CopyBox(0, view_x0, view_y0, view_y1, false);
+    }
+    if (view_x1 < SCREENWIDTH)
+    {
+        CopyBox(view_x1, SCREENWIDTH, view_y0, view_y1, false);
+    }
+    if (view_y1 < SCREENHEIGHT)
+    {
+        CopyBox(0, SCREENWIDTH, view_y1, SCREENHEIGHT, false);
+    }
+
+    copy_texture = view_texture;
+    CopyBox(view_x0, view_x1, view_y0, view_y1, true);
+
+    for (b = view_y0 / BAND_ROWS; b * BAND_ROWS < view_y1; ++b)
+    {
+        x0 = band_x0[b] > view_x0 ? band_x0[b] : view_x0;
+        x1 = band_x1[b] < view_x1 ? band_x1[b] : view_x1;
+        y0 = b * BAND_ROWS > view_y0 ? b * BAND_ROWS : view_y0;
+        y1 = b * BAND_ROWS + BAND_ROWS < view_y1 ? b * BAND_ROWS + BAND_ROWS
+                                                  : view_y1;
+        if (x0 < x1)
+        {
+            CopyBox(x0, x1, y0, y1, false);
+        }
+    }
+
+    copy_texture = texture;
+}
+#endif
+
+// -paircheck: every group of the view copied as pairs must be in pairs,
+// unless a mark reaches it
+static void PairCheck(void)
+{
+    int x, y, b;
+    boolean bad = false;
+
+    ++paircheck_frames;
+    if (view_x0 >= view_x1)
+    {
+        return;
+    }
+
+    for (y = view_y0; y < view_y1; ++y)
+    {
+        const pixel_t *row = I_VideoBuffer + y * SCREENWIDTH;
+
+        b = y / BAND_ROWS;
+        for (x = view_x0; x < view_x1; x += 2)
+        {
+            if (row[x] != row[x + 1]
+                && !(x >= band_x0[b] && x < band_x1[b]))
+            {
+                ++paircheck_bad;
+                if (paircheck_first_frame < 0)
+                {
+                    paircheck_first_frame = paircheck_frames;
+                    paircheck_first_x = x;
+                    paircheck_first_y = y;
+                }
+                bad = true;
+            }
+        }
+    }
+
+    paircheck_badframes += bad;
+}
+
 void I_SetGrabMouseCallback(grabmouse_callback_t func)
 {
     grabmouse_callback = func;
@@ -322,6 +432,15 @@ void I_ShutdownGraphics(void)
 
         // -sdl2check's result: the pages that differed from the screen
         // Doom drew
+        if (paircheck)
+        {
+            printf("paircheck: %lu frames, %lu with %lu pairs not in pairs"
+                   " (first: frame %d at %d,%d)\n", paircheck_frames,
+                   paircheck_badframes, paircheck_bad,
+                   paircheck_first_frame, paircheck_first_x,
+                   paircheck_first_y);
+        }
+
         if (STDL_SDL2_GetCheck(renderer, &chk) == 0)
         {
             printf("sdl2check: %lu flips, %lu unlike the screen drawn"
@@ -460,10 +579,15 @@ void I_FinishUpdate (void)
         I_MarkRect(0, SCREENHEIGHT - 1, 80, 1);
     }
 
+    if (paircheck)
+    {
+        PairCheck();
+    }
+
 #ifdef ATARI_FULL_FRAMES
-    // Heretic, Hexen and Strife draw into the screen without marking what
-    // they drew, as Doom's renderer does here: all of it, every frame
-    I_MarkRect(0, 0, SCREENWIDTH, SCREENHEIGHT);
+    // Heretic, Hexen and Strife: all of the screen, every frame, the
+    // add-on converting what changed (CopyFullFrame)
+    anything_marked = true;
 #endif
 
     // Draw disk icon before blit, if necessary.
@@ -483,7 +607,11 @@ void I_FinishUpdate (void)
         return;
     }
 
+#ifdef ATARI_FULL_FRAMES
+    CopyFullFrame();
+#else
     CopyMarked();
+#endif
     ClearMarks();
 
     SDL_RenderPresent(renderer);
@@ -611,6 +739,15 @@ void I_GraphicsCheckCommandLine(void)
 
     //!
     // @category video
+    //
+    // Check that the low-detail view is in pixel pairs wherever it is
+    // copied as pairs, and print the count at the end (testing).
+    //
+
+    paircheck = M_CheckParm("-paircheck") > 0;
+
+    //!
+    // @category video
     // @arg <n>
     //
     // Frames a second over n seconds of play from the first frame
@@ -670,6 +807,49 @@ void I_InitGraphics(void)
         SDL_SetHint(STDL_SDL2_HINT_CHECK, "1");
     }
 
+#ifdef ATARI_FULL_FRAMES
+    // Heretic, Hexen and Strife: the add-on's compare (CopyFullFrame)
+    // pays where a border round the view stays as it is, a view
+    // narrower than the screen (screenblocks below 10 at start-up). At
+    // 10 it is the status bar alone, which changes often, and every
+    // copy, the view's too, then goes into the add-on's chunky copy of
+    // the screen: TT under Hatari, timedemo demo1, low detail, Heretic
+    // ran 2.4% slower with it at size 10 and 13% faster at size 7.
+
+    {
+        boolean compare = screenblocks < 10;
+
+        //!
+        // @category video
+        //
+        // Heretic, Hexen and Strife: convert only the groups of the
+        // screen that changed, whatever the view's size.
+        //
+
+        if (M_CheckParm("-compare"))
+        {
+            compare = true;
+        }
+
+        //!
+        // @category video
+        //
+        // Heretic, Hexen and Strife: convert all of the screen every
+        // frame, whatever the view's size.
+        //
+
+        if (M_CheckParm("-nocompare"))
+        {
+            compare = false;
+        }
+
+        if (compare)
+        {
+            SDL_SetHint(STDL_SDL2_HINT_COMPARE, "1");
+        }
+    }
+#endif
+
     renderer = SDL_CreateRenderer(screen, -1, 0);
     if (renderer == NULL)
     {
@@ -695,6 +875,17 @@ void I_InitGraphics(void)
     {
         I_Error("I_InitGraphics: %s", SDL_GetError());
     }
+    copy_texture = texture;
+
+#ifdef ATARI_FULL_FRAMES
+    view_texture = STDL_SDL2_CreateTextureFrom(renderer, I_VideoBuffer,
+                                               SCREENWIDTH, SCREENHEIGHT,
+                                               SCREENWIDTH);
+    if (view_texture == NULL)
+    {
+        I_Error("I_InitGraphics: %s", SDL_GetError());
+    }
+#endif
 
     // Set the palette
 

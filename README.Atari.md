@@ -132,11 +132,23 @@ its IWAD (`HERETIC.WAD` or
 screens (Heretic's and Strife's DOS text screens, Hexen's 640x480 one)
 print as lines, as Doom's does, and Hexen's CD music is not there.
 
-They have none of Doom's work above: their own renderers in C, and
-their whole screen converted every frame, as Raven took most of the
-marks of what changed out of theirs (`ATARI_FULL_FRAMES`). Strife's
+They have their own renderers, in C but for the column and span
+drawers, which on a TT or a Falcon are Doom's 68020 ones
+(`src/atari/r_draw_m68k.h`): the columns are the same pixels as
+Raven's, the spans 0.08% of their pixels a texel apart (Raven's
+positions are 16.16, and the assembler's lose 1/65536 of a texel each
+time a coordinate wraps), both checked by drawing every column and span
+both ways through demos 1 and 2 of each game. Raven took most of the
+marks of what changed out of them, so the whole screen is copied every
+frame (`ATARI_FULL_FRAMES`). With a view narrower than the screen
+(`screenblocks` below 10 at start-up) STDL compares those copies with
+the screen and converts only what changed (`STDL_SDL2_HINT_COMPARE`);
+at size 10, with only the status bar outside the view, that costs more
+than it saves (`-compare` and `-nocompare` choose either way). Strife's
 title sequence wants a zone of more than a 4 MB TT-RAM machine's 2.6 MB
 (its levels play in that); with 8 MB, on a 14 MB Falcon, it runs.
+Strife prints three lines to the console after its start-up screen is
+up, which land on the picture's first frames.
 
 Heretic and Hexen play in low detail here, as Doom does
 (`detaillevel 0` in `HERETIC.CFG` or `HEXEN.CFG` for high). Raven left
@@ -145,11 +157,24 @@ drawers wrote one pixel where they needed two, the translucent and
 translated drawers had no low versions, and nothing set it. Here every
 drawer has one (the sprites pick theirs through pointers, as the walls
 do), and the sky, which both draw themselves, doubles its pixels too.
-Their views aren't converted as pairs (their whole screens are). On a
-TT (Hatari, timedemo demo1) Heretic went from 4.91 to 7.19 frames a
-second, Hexen from 3.86 to 5.55; in real play Heretic from 1.59 to
-2.45, the game at full speed in both. A Mega STE gains 7%, being bound
-by the game logic. Strife has no low detail: Rogue took it out.
+The view is converted as pixel pairs, copied from a second texture
+over the screen, in a batch of its own with what was drawn over it
+(`V_MarkRect`: messages, the menu), which STDL converts whole. On a TT
+(Hatari, demo1), frames a second:
+
+| | Heretic | Hexen |
+| --- | --- | --- |
+| timedemo, high detail, C drawers | 4.91 | 3.86 |
+| timedemo, low detail, C drawers | 7.19 | 5.55 |
+| timedemo, low, 68020 drawers, pairs (size 10) | 9.86 | 6.87 |
+| timedemo, size 7, the compare off | 11.91 | 8.56 |
+| timedemo, size 7 (the compare on) | 13.44 | 8.92 |
+| real play, low detail, size 10 | 3.73 | 5.64 |
+
+The real play is the game at full speed (Heretic was 2.45 frames a
+second with the C drawers, 1.59 in high detail). A Mega STE gains 7%
+from low detail, being bound by the game logic. Strife has no low
+detail: Rogue took it out.
 
 ## Building
 
@@ -188,7 +213,8 @@ sources:
 | `i_video_atari.c` | the screen: `i_video.c`'s interface on the add-on |
 | `i_sound_atari.c` | effects on STDL's voices |
 | `opl_atari.c` | an OPL driver that plays on the YM2149 |
-| `r_draw_m68k.c` | the 68020 drawers |
+| `r_draw_m68k.h` | the 68020 column and span loops and their set-up, for every game's renderer |
+| `r_draw_m68k.c` | Doom's 68020 drawers, with its word colormaps and fuzz |
 | `atari_align.c` | the program moved onto a long, linked ahead of the C library's start |
 | `i_endoom_atari.c`, `net_atari.c` | ENDOOM as text; no network |
 | `txt_atari.c`, `i_videohr_atari.c` | Heretic's, Strife's and Hexen's start-up screens, which fail so they print lines |
@@ -238,4 +264,7 @@ compares every page with the screen Doom drew before it is shown, and
 prints the count of those unlike it at the end (none, for whole demos
 1-3 in low detail on a TT and demo3 on a Falcon and stretched to 4:3);
 `-nopairs` converts the low-detail view as any other pixels, for
-timing.
+timing, and `-paircheck` checks every frame that the view is in pairs
+wherever it is copied as pairs, printing the count of pairs that
+weren't at the end (none, for whole demos 1-3 of Doom and 1-2 of
+Heretic and Hexen, low detail at sizes 10 and 7).
