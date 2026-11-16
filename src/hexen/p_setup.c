@@ -801,6 +801,9 @@ void P_SetupLevel(int episode, int map, int playermask, skill_t skill)
 // Load colormap and set the fullbright flag
     i = P_GetMapFadeTable(gamemap);
     W_ReadLump(i, colormaps);
+#ifdef R_DRAW_M68K
+    R_InitColormapsW(W_LumpLength(i));
+#endif
     if (i == W_GetNumForName("COLORMAP"))
     {
         LevelUseFullBright = true;

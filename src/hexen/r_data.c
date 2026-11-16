@@ -487,6 +487,9 @@ void R_InitColormaps(void)
     length = W_LumpLength(lump);
     colormaps = Z_Malloc(length, PU_STATIC, 0);
     W_ReadLump(lump, colormaps);
+#ifdef R_DRAW_M68K
+    R_InitColormapsW(length);
+#endif
 }
 
 

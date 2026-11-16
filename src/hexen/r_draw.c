@@ -54,6 +54,7 @@ byte *dc_source;                // first pixel in a column (possibly virtual)
 
 int dccount;                    // just for profiling
 
+#ifndef R_DRAW_M68K // the 68020 drawers: below
 void R_DrawColumn(void)
 {
     int count;
@@ -82,7 +83,9 @@ void R_DrawColumn(void)
     }
     while (count--);
 }
+#endif
 
+#ifndef R_DRAW_M68K // the 68020 drawers: below
 void R_DrawColumnLow(void)
 {
     int count;
@@ -113,6 +116,7 @@ void R_DrawColumnLow(void)
     }
     while (count--);
 }
+#endif
 
 void R_DrawTLColumn(void)
 {
@@ -352,6 +356,7 @@ byte *ds_source;                // start of a 64*64 tile image
 
 int dscount;                    // just for profiling
 
+#ifndef R_DRAW_M68K // the 68020 drawers: below
 void R_DrawSpan(void)
 {
     fixed_t xfrac, yfrac;
@@ -379,7 +384,9 @@ void R_DrawSpan(void)
     }
     while (count--);
 }
+#endif
 
+#ifndef R_DRAW_M68K // the 68020 drawers: below
 void R_DrawSpanLow(void)
 {
     fixed_t xfrac, yfrac;
@@ -408,6 +415,7 @@ void R_DrawSpanLow(void)
     }
     while (count--);
 }
+#endif
 
 void R_DrawTLColumnLow(void)
 {
@@ -544,6 +552,83 @@ void R_DrawAltTLColumnLow(void)
 }
 
 
+
+#ifdef R_DRAW_M68K
+//
+// The column and span drawers for a 68020 or better
+// (src/atari/r_draw_m68k.h, Doom's), which replace the C ones above.
+// Columns are the same pixels. Spans are Raven's 16.16 positions less
+// 1/65536 of a texel each time a coordinate wraps (0.08% of their
+// pixels a texel apart), as checked by drawing every column and span
+// both ways through demos 1 and 2 of each game.
+//
+
+unsigned short *colormaps_w;
+static int colormaps_w_length;
+
+// The word colormaps: every light table again, each colour in both
+// bytes of a word, for low detail's word stores. Again whenever the
+// colormaps change (Hexen's fog).
+void R_InitColormapsW(int length)
+{
+    int i;
+
+    if (colormaps_w == NULL)
+    {
+        colormaps_w = Z_Malloc(length * 2, PU_STATIC, NULL);
+        colormaps_w_length = length;
+    }
+    if (length > colormaps_w_length)
+    {
+        length = colormaps_w_length;
+    }
+    for (i = 0; i < length; ++i)
+    {
+        colormaps_w[i] = colormaps[i] * 0x0101;
+    }
+}
+
+static inline __attribute__((always_inline)) void DrawColumn(const int low)
+{
+    colrec_t c;
+
+    if (dc_yh < dc_yl)
+        return;
+
+    R_SetupColumn(&c, dc_x, dc_yl, dc_yh, dc_source, dc_colormap,
+                  dc_iscale, dc_texturemid, low);
+    DrawColumnRec(&c, low);
+}
+
+void R_DrawColumn(void)
+{
+    DrawColumn(0);
+}
+
+void R_DrawColumnLow(void)
+{
+    DrawColumn(1);
+}
+
+static inline __attribute__((always_inline)) void DrawSpan(const int low)
+{
+    spanrec_t r;
+
+    R_SetupSpan(&r, ds_y, ds_x1, ds_x2, ds_colormap,
+                ds_xfrac, ds_yfrac, ds_xstep, ds_ystep, low);
+    DrawSpanRec(&r, ds_source, low);
+}
+
+void R_DrawSpan(void)
+{
+    DrawSpan(0);
+}
+
+void R_DrawSpanLow(void)
+{
+    DrawSpan(1);
+}
+#endif
 
 /*
 ================

@@ -487,4 +487,11 @@ void R_DrawSpanLow(void);
 void R_InitBuffer(int width, int height);
 void R_InitTranslationTables(void);
 
+// The 68020 drawers' records and loops (TT and Falcon), and the word
+// colormaps they take in low detail (r_draw.c)
+#include "r_draw_m68k.h"
+#ifdef R_DRAW_M68K
+void R_InitColormapsW(int length);
+#endif
+
 #endif // __R_LOCAL__
