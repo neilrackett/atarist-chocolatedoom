@@ -140,11 +140,14 @@ positions are 16.16, and the assembler's lose 1/65536 of a texel each
 time a coordinate wraps), both checked by drawing every column and span
 both ways through demos 1 and 2 of each game. Raven took most of the
 marks of what changed out of them, so the whole screen is copied every
-frame (`ATARI_FULL_FRAMES`). With a view narrower than the screen
-(`screenblocks` below 10 at start-up) STDL compares those copies with
-the screen and converts only what changed (`STDL_SDL2_HINT_COMPARE`);
-at size 10, with only the status bar outside the view, that costs more
-than it saves (`-compare` and `-nocompare` choose either way). Strife's
+frame (`ATARI_FULL_FRAMES`). While the view is narrower than the
+screen (`screenblocks` below 10) STDL compares those copies with the
+screen and converts only what changed; at size 10, with only the
+status bar outside the view, that costs more than it saves, so the
+compare follows the view's size as the player changes it
+(`STDL_SDL2_SetCompare`, whose 76.8K copy of the screen is allocated
+the first time the view is made smaller). `-compare` and `-nocompare`
+fix it either way. Strife's
 title sequence wants a zone of more than a 4 MB TT-RAM machine's 2.6 MB
 (its levels play in that); with 8 MB, on a 14 MB Falcon, it runs.
 Strife prints three lines to the console after its start-up screen is

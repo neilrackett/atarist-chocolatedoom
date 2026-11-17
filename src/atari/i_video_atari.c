@@ -90,6 +90,11 @@ static SDL_Texture *copy_texture;
 #ifdef ATARI_FULL_FRAMES
 static SDL_Texture *view_texture;
 extern int screenblocks;
+
+// The add-on's compare (STDL_SDL2_SetCompare): 1 -compare, 0
+// -nocompare, -1 by the view's size each frame; and whether it is on
+static int compare_force = -1;
+static boolean compare_on;
 #endif
 
 // -paircheck: groups of the pairs view that were not in pairs and not
@@ -322,14 +327,28 @@ static void CopyMarked(void)
 // Heretic, Hexen and Strife draw into the screen without marking most
 // of what they drew, so every frame copies all of it; with a view
 // narrower than the screen the add-on compares those copies with the
-// screen and converts only the groups that changed
-// (STDL_SDL2_HINT_COMPARE, I_InitGraphics). The view in pairs is copied
-// from another texture over the same pixels, in a batch of its own
-// (the add-on doesn't compare a batch with pairs in it), with the marks
-// over it (V_MarkRect: messages, the menu), which it converts whole.
+// screen and converts only the groups that changed. The compare pays
+// where a border round the view stays as it is (screenblocks below
+// 10). At 10 there is only the status bar, which changes often, and
+// the add-on's copy of the screen must take every copy, the view's
+// too: TT under Hatari, timedemo demo1, low detail, Heretic ran 2.4%
+// slower with it at size 10 and 13% faster at size 7. So it follows
+// the view's size; the first time it is wanted the add-on allocates
+// its copy (76.8K), and without that memory there is none. The view
+// in pairs is copied from another texture over the same pixels, in a
+// batch of its own (the add-on doesn't compare a batch with pairs in
+// it), with the marks over it (V_MarkRect: messages, the menu), which
+// it converts whole.
 static void CopyFullFrame(void)
 {
     int b, y0, y1, x0, x1;
+    boolean compare = compare_force >= 0 ? compare_force : screenblocks < 10;
+
+    if (compare != compare_on)
+    {
+        STDL_SDL2_SetCompare(renderer, compare);
+        compare_on = compare;
+    }
 
     copy_texture = texture;
 
@@ -808,45 +827,33 @@ void I_InitGraphics(void)
     }
 
 #ifdef ATARI_FULL_FRAMES
-    // Heretic, Hexen and Strife: the add-on's compare (CopyFullFrame)
-    // pays where a border round the view stays as it is, a view
-    // narrower than the screen (screenblocks below 10 at start-up). At
-    // 10 it is the status bar alone, which changes often, and every
-    // copy, the view's too, then goes into the add-on's chunky copy of
-    // the screen: TT under Hatari, timedemo demo1, low detail, Heretic
-    // ran 2.4% slower with it at size 10 and 13% faster at size 7.
+    // Heretic, Hexen and Strife: the add-on's compare follows the
+    // view's size (CopyFullFrame) unless one of these says otherwise.
 
+    //!
+    // @category video
+    //
+    // Heretic, Hexen and Strife: convert only the groups of the
+    // screen that changed, whatever the view's size.
+    //
+
+    if (M_CheckParm("-compare"))
     {
-        boolean compare = screenblocks < 10;
+        compare_force = 1;
+        SDL_SetHint(STDL_SDL2_HINT_COMPARE, "1");
+        compare_on = true;
+    }
 
-        //!
-        // @category video
-        //
-        // Heretic, Hexen and Strife: convert only the groups of the
-        // screen that changed, whatever the view's size.
-        //
+    //!
+    // @category video
+    //
+    // Heretic, Hexen and Strife: convert all of the screen every
+    // frame, whatever the view's size.
+    //
 
-        if (M_CheckParm("-compare"))
-        {
-            compare = true;
-        }
-
-        //!
-        // @category video
-        //
-        // Heretic, Hexen and Strife: convert all of the screen every
-        // frame, whatever the view's size.
-        //
-
-        if (M_CheckParm("-nocompare"))
-        {
-            compare = false;
-        }
-
-        if (compare)
-        {
-            SDL_SetHint(STDL_SDL2_HINT_COMPARE, "1");
-        }
+    if (M_CheckParm("-nocompare"))
+    {
+        compare_force = 0;
     }
 #endif
 
